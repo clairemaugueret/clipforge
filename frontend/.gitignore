@@ -1,0 +1,16 @@
+# Node.js
+node_modules/
+.env
+*.log
+
+# React build
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
