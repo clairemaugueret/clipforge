@@ -1,10 +1,10 @@
 const Users = require("../models/users");
 
-// Récupérer tous les utilisateurs whitelistés
+// CONTROLLER - Récupérer tous les utilisateurs whitelistés
 async function getAllUsers(req, res) {
   try {
     const users = await Users.find(
-      { whitelist: true }, // Filtrer les whitelistés
+      { whitelist: true }, // Filtrer uniquement les whitelistés
       {
         __v: 0,
         token: 0,
