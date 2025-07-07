@@ -11,6 +11,14 @@ const usersSchema = mongoose.Schema({
   whitelist: {
     type: Boolean,
     default: true,
+    // Indique si l'utilisateur est sur la whitelist (dans le cas où on souhaiterait écarter l'accès à certains anciens utilisateurs, sans les supprimer de la DB pour éviter de perdre de l'historique)
+    // Un utilisateur non whitelisté ne peut pas accéder à l'application
+  },
+  status: {
+    type: String,
+    enum: ["user", "expert"],
+    default: "user",
+    // Statut de l'utilisateur dans l'application (les experts ont plus de poids pour les votes)
   },
 });
 

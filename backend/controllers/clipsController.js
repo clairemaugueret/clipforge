@@ -18,6 +18,12 @@ function extractClipId(link) {
   }
 }
 
+// Vérifier si un clip à déjà été proposé
+async function isClipAlreadyProposed(clipId) {
+  const existingClip = await Clips.findOne({ clip_id: clipId });
+  return !!existingClip; // '!!' permet convertir en booléen, force la valeur à être soit true soit false
+}
+
 // Récupérer les infos d’un clip via l’API Twitch
 async function getClipInfo(req, res) {
   const clipId = req.params.id;
@@ -31,6 +37,14 @@ async function getClipInfo(req, res) {
       .json({ result: false, error: result.error });
   }
 
+  // Vérifier si le clip existe déjà dans la DB
+  if (await isClipAlreadyProposed(clipId)) {
+    return res
+      .status(409)
+      .json({ result: false, error: "Clip already proposed" });
+  }
+
+  // Si le clip n'existe pas, on le renvoie au frontend
   return res.status(200).json({ result: true, clipData: result.clip });
 }
 
@@ -49,6 +63,13 @@ async function createClip(req, res) {
     return res
       .status(400)
       .json({ result: false, error: "Invalid Twitch clip URL" });
+  }
+
+  // Vérifier si le clip existe déjà dans la DB
+  if (await isClipAlreadyProposed(clipId)) {
+    return res
+      .status(409)
+      .json({ result: false, error: "Clip already proposed" });
   }
 
   const result = await fetchTwitchClipData(clipId);
@@ -73,6 +94,7 @@ async function createClip(req, res) {
       tags,
       editable: editable || false,
       comments: comments || [],
+      votes: [{ user: req.user._id, result: "OK" }], // Initialiser avec un vote OK de l'auteur
     });
 
     await newClip.save();

@@ -25,8 +25,7 @@ const votesSchema = mongoose.Schema({
   },
   result: {
     type: String,
-    enum: ["en attente", "OK", "KO", "à revoir"],
-    default: "en attente",
+    enum: ["OK", "KO", "à revoir"],
   },
 });
 
