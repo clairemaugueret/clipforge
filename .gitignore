@@ -1,0 +1,10 @@
+# Ignore all node_modules everywhere
+**/node_modules/
+**/.env
+**/dist
+**/build
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
