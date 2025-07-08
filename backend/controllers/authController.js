@@ -1,13 +1,13 @@
 const Users = require("../models/users");
 const uid2 = require("uid2");
-const { checkBody } = require("../modules/checkBody");
+const { checkBody } = require("../utils/checkBody");
 const {
   getTwitchOAuthToken,
   getTwitchUser,
   refreshTwitchToken,
 } = require("../services/twitchAuth");
 
-// Authentification via Twitch
+// CONTROLLER - Authentification via Twitch
 async function authWithTwitch(req, res) {
   if (!checkBody(req.body, ["code"])) {
     return res.status(400).json({ result: false, error: "Missing code" });
@@ -41,6 +41,13 @@ async function authWithTwitch(req, res) {
       });
       userJustCreated = true;
     } else {
+      // User existant : vérifier whitelist
+      if (!user.whitelist) {
+        return res
+          .status(403)
+          .json({ result: false, error: "User not whitelisted" });
+      }
+
       // User existant : MAJ (au cas où Twitch aurait changé les infos)
       user.username = twitchUser.display_name;
       user.avatar_url = twitchUser.profile_image_url;
@@ -59,6 +66,7 @@ async function authWithTwitch(req, res) {
         token: user.token,
         username: user.username,
         avatar_url: user.avatar_url,
+        status: user.status, // Simple user ou expert
       },
     };
 
@@ -76,7 +84,7 @@ async function authWithTwitch(req, res) {
   }
 }
 
-// Vérifier si un token Twitch est valide
+// FONCTION UTILITAIRE - Vérifier si un token Twitch est valide
 async function getValidTwitchToken(appToken) {
   const user = await Users.findOne({ token: appToken });
 
