@@ -1,6 +1,6 @@
 const Users = require("../models/users");
 const uid2 = require("uid2");
-const { checkBody } = require("../modules/checkBody");
+const { checkBody } = require("../utils/checkBody");
 const {
   getTwitchOAuthToken,
   getTwitchUser,
