@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 function ClipForm({
   allTags,
@@ -21,31 +21,38 @@ function ClipForm({
   const [editable, setEditable] = useState(initialData?.editable || false);
   const [newTag, setNewTag] = useState("");
 
-  useEffect(() => {
+  const emitChange = () => {
     if (onChange) {
-      const updatedDraft = {
+      onChange({
         ...initialData,
         subject: title,
         body: `${link}\n\n${comment}`,
         tags,
         editable,
         draft: true,
-      };
-      onChange(updatedDraft);
+      });
     }
-  }, [title, link, comment, tags, editable]);
+  };
 
   const toggleTag = (tag) => {
-    setTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    setTags((prev) => {
+      const updated = prev.includes(tag)
+        ? prev.filter((t) => t !== tag)
+        : [...prev, tag];
+      setTimeout(emitChange, 0);
+      return updated;
+    });
   };
 
   const handleAddTag = () => {
     const trimmed = newTag.trim();
     if (trimmed && !allTags.includes(trimmed)) {
       onAddTag(trimmed);
-      setTags([...tags, trimmed]);
+      setTags((prev) => {
+        const updated = [...prev, trimmed];
+        setTimeout(emitChange, 0);
+        return updated;
+      });
     }
     setNewTag("");
   };
@@ -65,6 +72,7 @@ function ClipForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
       <h2 className="text-xl font-bold text-gray-100">Proposer un clip</h2>
+
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Lien du clip
@@ -73,10 +81,12 @@ function ClipForm({
           type="url"
           value={link}
           onChange={(e) => setLink(e.target.value)}
+          onBlur={emitChange}
           required
           className="w-full p-2 border rounded"
         />
       </div>
+
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Titre
@@ -85,10 +95,12 @@ function ClipForm({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          onBlur={emitChange}
           required
           className="w-full p-2 border rounded"
         />
       </div>
+
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Tags
@@ -126,17 +138,23 @@ function ClipForm({
           </button>
         </div>
       </div>
+
       <div className="flex items-center text-gray-100 gap-2">
         <input
           id="editable"
           type="checkbox"
           checked={editable}
-          onChange={(e) => setEditable(e.target.checked)}
+          onChange={(e) => {
+            const newValue = e.target.checked;
+            setEditable(newValue);
+            emitChange();
+          }}
         />
         <label htmlFor="editable" className="text-sm">
           À éditer
         </label>
       </div>
+
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Commentaire
@@ -144,10 +162,12 @@ function ClipForm({
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
+          onBlur={emitChange}
           rows="3"
           className="w-full p-2 border rounded"
         />
       </div>
+
       <div className="flex gap-2">
         <button
           type="submit"
@@ -166,4 +186,5 @@ function ClipForm({
     </form>
   );
 }
+
 export default ClipForm;

@@ -1,22 +1,18 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { formatHumanDate } from "./utils/date";
 
 export default function ClipViewer({ clip }) {
-  const [comments, setComments] = useState(clip.comments || []);
   const [commentInput, setCommentInput] = useState("");
-
-  useEffect(() => {
-    setComments(clip.comments || []);
-  }, [clip]);
 
   const addComment = () => {
     if (!commentInput.trim()) return;
+    // Ce commentaire est temporaire, tu peux le passer au parent si tu veux le conserver
     const newComment = {
       user: "Moi",
       text: commentInput.trim(),
       date: new Date(),
     };
-    setComments((prev) => [...prev, newComment]);
+    // Pour l’instant on n’enregistre pas le commentaire
     setCommentInput("");
   };
 
@@ -51,11 +47,11 @@ export default function ClipViewer({ clip }) {
         </h3>
 
         <div className="h-[300px] overflow-y-auto bg-gray-900 p-4 rounded-md shadow-inner border-t border-gray-700 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-          {comments.length === 0 ? (
+          {(clip.comments?.length ?? 0) === 0 ? (
             <p className="text-gray-400 text-sm">Aucun commentaire encore.</p>
           ) : (
             <ul className="space-y-2 mb-4">
-              {comments.map((c, i) => (
+              {clip.comments.map((c, i) => (
                 <li
                   key={i}
                   className="text-sm bg-gray-100 p-2 rounded text-gray-800"

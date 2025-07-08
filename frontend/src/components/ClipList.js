@@ -1,14 +1,14 @@
 import { formatHumanDate } from "./utils/date";
 
-function ClipList({ clips, onSelect, selectedClip }) {
+function ClipList({ clips, onSelect, selectedClipId }) {
   return (
     <ul className="divide-y">
       {clips.map((clip) => (
         <div
           key={clip._id}
-          onClick={() => onSelect(clip)}
+          onClick={() => onSelect(clip._id)} // 👈 corriger ici
           className={`px-4 py-3 cursor-pointer hover:bg-gray-600 ${
-            selectedClip === clip ? "bg-gray-600" : ""
+            selectedClipId === clip._id ? "bg-gray-600" : ""
           }`}
         >
           <div className="flex justify-between items-start">
@@ -37,4 +37,5 @@ function ClipList({ clips, onSelect, selectedClip }) {
     </ul>
   );
 }
+
 export default ClipList;

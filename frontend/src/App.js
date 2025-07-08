@@ -158,12 +158,14 @@ const initialClips = [
 
 function App() {
   const [clips, setClips] = useState(initialClips);
-  const [selectedClip, setSelectedClip] = useState(null);
+  const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [allTags, setAllTags] = useState(["valorant", "fun", "chat"]);
-  const [draftClip, setDraftClip] = useState(null); //brouillon de clip
+  const [draftClip, setDraftClip] = useState(null);
+
+  const selectedClip = clips.find((c) => c._id === selectedClipId);
 
   const toggleTag = (tag) => {
     setSelectedTags((prev) =>
@@ -172,24 +174,24 @@ function App() {
   };
 
   const handleProposeClick = () => {
-    if (draftClip) {
-      setSelectedClip(draftClip);
-      setShowForm(true);
-      return;
-    }
-
-    const draft = {
+    const newDraft = {
+      _id: "draft",
       subject: "Nouveau clip",
       body: "",
       tags: [],
-      editable: true,
+      editable: false,
       draft: true,
       author: "Moi",
       createdAt: new Date(),
     };
-    setDraftClip(draft);
-    setClips((prev) => [draft, ...prev]);
-    setSelectedClip(draft);
+
+    setDraftClip(newDraft);
+    setClips((prev) => {
+      const withoutOldDraft = prev.filter((clip) => clip._id !== "draft");
+      return [newDraft, ...withoutOldDraft];
+    });
+
+    setSelectedClipId("draft");
     setShowForm(true);
   };
 
@@ -200,29 +202,41 @@ function App() {
       );
       if (!confirmDelete) return;
 
-      setClips((prev) => prev.filter((clip) => clip !== selectedClip));
+      setClips((prev) => prev.filter((clip) => clip._id !== "draft"));
       setDraftClip(null);
     }
 
     setShowForm(false);
-    setSelectedClip(null);
+    setSelectedClipId(null);
   };
 
   const handleDraftUpdate = (updatedClip) => {
+    const updated = { ...updatedClip, draft: true };
+
     setClips((prev) =>
-      prev.map((clip) => (clip === draftClip ? updatedClip : clip))
+      prev.map((clip) => (clip._id === "draft" ? updated : clip))
     );
-    setDraftClip(updatedClip);
-    setSelectedClip(updatedClip);
+
+    setDraftClip(updated);
+    setSelectedClipId("draft");
+  };
+
+  const handleSelectClip = (clipId) => {
+    const freshClip = clips.find((c) => c._id === clipId);
+    console.log(selectedClip);
+    setSelectedClipId(clipId);
+    setShowForm(freshClip?._id === "draft");
   };
 
   const addNewClip = (clip) => {
-    // remplace le brouillon par la version finale
+    const publishedClip = { ...clip, draft: false };
+
     setClips((prev) =>
-      prev.map((c) => (c === draftClip ? { ...clip, draft: false } : c))
+      prev.map((c) => (c._id === "draft" ? publishedClip : c))
     );
+
     setShowForm(false);
-    setSelectedClip(clip);
+    setSelectedClipId(publishedClip._id);
     setDraftClip(null);
   };
 
@@ -236,21 +250,17 @@ function App() {
     selectedTags.length === 0
       ? clips
       : clips.filter((clip) =>
-          clip.tags.some((tag) => selectedTags.includes(tag))
+          (clip.tags || []).some((tag) => selectedTags.includes(tag))
         );
 
   return (
     <div className="h-screen flex flex-col">
-      {/* Header */}
       <header className="bg-indigo-950 text-white p-4 shadow-md">
         <h1 className="text-xl font-bold">Mes Clips</h1>
       </header>
 
-      {/* 3 colonnes sous le header */}
       <div className="flex flex-1 h-0">
-        {/* Colonne gauche : liste des clips */}
         <aside className="w-1/4 max-w-sm bg-gray-700 border-r border-gray-300 flex flex-col">
-          {/* En-tête liste */}
           <div className="p-4 border-b font-bold text-lg flex text-gray-50 justify-between items-center">
             <span>Liste des clips</span>
             <button
@@ -261,16 +271,14 @@ function App() {
             </button>
           </div>
 
-          {/* Liste scrollable */}
           <div className="flex-1 overflow-y-auto">
             <ClipList
               clips={filteredClips}
-              onSelect={setSelectedClip}
-              selectedClip={selectedClip}
+              onSelect={handleSelectClip}
+              selectedClipId={selectedClipId}
             />
           </div>
 
-          {/* Bouton proposer en bas */}
           <div className="p-4 border-t">
             <button
               onClick={handleProposeClick}
@@ -281,10 +289,8 @@ function App() {
           </div>
         </aside>
 
-        {/* Colonne centrale : zone scrollable */}
         <main className="flex-1 bg-gray-800 h-full p-6">
-          {!showForm && selectedClip && <ClipViewer clip={selectedClip} />}
-          {showForm && (
+          {showForm && selectedClip ? (
             <ClipForm
               allTags={allTags}
               onSubmit={addNewClip}
@@ -293,10 +299,13 @@ function App() {
               onChange={handleDraftUpdate}
               initialData={selectedClip}
             />
+          ) : (
+            selectedClip && (
+              <ClipViewer clip={selectedClip} key={selectedClip._id} />
+            )
           )}
         </main>
 
-        {/* Colonne droite : image + bouton (fixes) */}
         <div className="w-[700px] bg-gray-800 p-4 flex flex-col items-end gap-4">
           {selectedClip && (
             <>
@@ -325,7 +334,6 @@ function App() {
         </div>
       </div>
 
-      {/* Modale de filtres */}
       {showFilterModal && (
         <TagFilterModal
           allTags={allTags}
