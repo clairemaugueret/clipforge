@@ -9,14 +9,8 @@ function ClipForm({
   initialData,
 }) {
   const [title, setTitle] = useState(initialData?.subject || "");
-  const [link, setLink] = useState(() => {
-    const parts = initialData?.body?.split("\n\n") || [];
-    return parts[0] || "";
-  });
-  const [comment, setComment] = useState(() => {
-    const parts = initialData?.body?.split("\n\n") || [];
-    return parts[1] || "";
-  });
+  const [link, setLink] = useState(initialData?.link || "");
+  const [comment, setComment] = useState(initialData?.comment || "");
   const [tags, setTags] = useState(initialData?.tags || []);
   const [editable, setEditable] = useState(initialData?.editable || false);
   const [newTag, setNewTag] = useState("");
@@ -26,7 +20,7 @@ function ClipForm({
       onChange({
         ...initialData,
         subject: title,
-        body: `${link}\n\n${comment}`,
+        link,
         tags,
         editable,
         draft: true,
@@ -62,7 +56,7 @@ function ClipForm({
     onSubmit({
       ...initialData,
       subject: title,
-      body: `${link}\n\n${comment}`,
+      link,
       tags,
       editable,
       draft: false,

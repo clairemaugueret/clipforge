@@ -2,16 +2,44 @@ import { useState } from "react";
 import ClipList from "./components/ClipList";
 import ClipViewer from "./components/ClipViewer";
 import ClipForm from "./components/ClipForm";
-import TagFilterModal from "./components/TagFilterModal";
+import TagFilterModal from "./components/utils/TagFilterModal";
+import LoginModal from "./components/utils/LoginModal";
 import { formatHumanDate } from "./components/utils/date";
+import default_user from "./components/images/default_user.png";
+
+const Users = [
+  {
+    userId: 1,
+    pseudo: "Boubou",
+    profil: "expert",
+    userImage: "https://i.pravatar.cc/40?u=user1",
+  },
+  {
+    userId: 2,
+    pseudo: "Claire",
+    profil: "expert",
+    userImage: "https://i.pravatar.cc/40?u=user2",
+  },
+  {
+    userId: 3,
+    pseudo: "TrasTop",
+    profil: "expert",
+    userImage: "",
+  },
+  {
+    userId: 4,
+    pseudo: "Heaven",
+    profil: "random",
+    userImage: "https://i.pravatar.cc/40?u=user1",
+  },
+];
 
 const initialClips = [
   {
     _id: 1,
     subject: "Ace au sniper",
-    body: "Un moment incroyable sur Valorant avec l'Operator.",
     tags: ["valorant", "fun"],
-    editable: false,
+    editable: true,
     author: "Boubou",
     createdAt: new Date("2025-07-02T17:57:28"),
     link: "https://www.twitch.tv/evoxia/clip/CreativeManlySlothDansGame-0Lo1bVZVA142TCTj",
@@ -33,7 +61,6 @@ const initialClips = [
   {
     _id: 2,
     subject: "Chat rigolo",
-    body: "Un clip où mon chat saute dans une boîte. Trop marrant.",
     tags: ["chat", "fun"],
     editable: false,
     author: "Claire",
@@ -53,9 +80,8 @@ const initialClips = [
   {
     _id: 3,
     subject: "Clutch 1v3",
-    body: "Clutch tendu sur Ascent, beaucoup de stress !",
     tags: ["valorant"],
-    editable: false,
+    editable: true,
     author: "TrasTop",
     createdAt: new Date("2025-06-30T11:35:18"),
     link: "https://www.twitch.tv/evoxia/clip/HardNeighborlyPineappleMVGame-COIRcfSMOMCl8onZ",
@@ -73,7 +99,6 @@ const initialClips = [
   {
     _id: 4,
     subject: "ct cho",
-    body: "https://youtu.be/exemple\n\nUn moment intense !",
     tags: ["valorant", "fun"],
     author: "Sacha",
     createdAt: "2025-07-01T09:00:00Z",
@@ -161,6 +186,7 @@ function App() {
   const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [allTags, setAllTags] = useState(["valorant", "fun", "chat"]);
   const [draftClip, setDraftClip] = useState(null);
@@ -173,11 +199,22 @@ function App() {
     );
   };
 
+  const [expertVotes, setExpertVotes] = useState({});
+
+  const handleExpertVote = (clipId, pseudo, vote) => {
+    setExpertVotes((prev) => ({
+      ...prev,
+      [clipId]: {
+        ...(prev[clipId] || {}),
+        [pseudo]: vote,
+      },
+    }));
+  };
+
   const handleProposeClick = () => {
     const newDraft = {
       _id: "draft",
       subject: "Nouveau clip",
-      body: "",
       tags: [],
       editable: false,
       draft: true,
@@ -228,6 +265,24 @@ function App() {
     setShowForm(freshClip?._id === "draft");
   };
 
+  const handleEditClip = () => {
+    if (!selectedClipId) return;
+
+    const clipToEdit = clips.find((c) => c._id === selectedClipId);
+    if (!clipToEdit) return;
+
+    const draftClip = {
+      ...clipToEdit,
+      draft: true,
+      _id: "draft",
+    };
+
+    setClips((prev) => [...prev.filter((c) => c._id !== "draft"), draftClip]);
+
+    setSelectedClipId("draft");
+    setShowForm(true);
+  };
+
   const addNewClip = (clip) => {
     const publishedClip = { ...clip, draft: false };
 
@@ -255,8 +310,15 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col">
-      <header className="bg-indigo-950 text-white p-4 shadow-md">
+      <header className="bg-indigo-950 text-white p-4 shadow-md flex justify-between items-center">
         <h1 className="text-xl font-bold">Mes Clips</h1>
+        <button onClick={() => setShowLoginModal(true)}>
+          <img
+            src={default_user}
+            alt="Se connecter"
+            className="w-8 h-8 rounded-full border border-white hover:ring-2 ring-indigo-400"
+          />
+        </button>
       </header>
 
       <div className="flex flex-1 h-0">
@@ -276,6 +338,8 @@ function App() {
               clips={filteredClips}
               onSelect={handleSelectClip}
               selectedClipId={selectedClipId}
+              users={Users}
+              expertVotes={expertVotes}
             />
           </div>
 
@@ -301,7 +365,15 @@ function App() {
             />
           ) : (
             selectedClip && (
-              <ClipViewer clip={selectedClip} key={selectedClip._id} />
+              <ClipViewer
+                clip={selectedClip}
+                users={Users}
+                expertVotes={expertVotes[selectedClipId] || {}}
+                onExpertVote={(pseudo, vote) =>
+                  handleExpertVote(selectedClipId, pseudo, vote)
+                }
+                onEditClip={handleEditClip}
+              />
             )
           )}
         </main>
@@ -341,6 +413,9 @@ function App() {
           toggleTag={toggleTag}
           onClose={() => setShowFilterModal(false)}
         />
+      )}
+      {showLoginModal && (
+        <LoginModal onClose={() => setShowLoginModal(false)} />
       )}
     </div>
   );

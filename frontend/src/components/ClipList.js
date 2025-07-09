@@ -1,6 +1,25 @@
 import { formatHumanDate } from "./utils/date";
+import default_user from "./images/default_user.png";
 
-function ClipList({ clips, onSelect, selectedClipId }) {
+function ClipList({
+  clips,
+  onSelect,
+  selectedClipId,
+  users = [],
+  expertVotes = {},
+}) {
+  const experts = users.filter((u) => u.profil === "expert");
+
+  const borderColor = (vote) => {
+    return vote === "oui"
+      ? "ring-4 ring-green-500"
+      : vote === "non"
+        ? "ring-4 ring-red-600"
+        : vote === "à revoir"
+          ? "ring-4 ring-amber-400"
+          : "ring-transparent";
+  };
+
   return (
     <ul className="divide-y">
       {clips.map((clip) => (
@@ -28,9 +47,25 @@ function ClipList({ clips, onSelect, selectedClipId }) {
             </div>
 
             {/* Partie droite : date */}
-            <span className="text-xs text-gray-400 whitespace-nowrap pl-4">
-              {formatHumanDate(clip.createdAt)}
-            </span>
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                {formatHumanDate(clip.createdAt)}
+              </span>
+
+              <div className="flex gap-2 pr-2">
+                {experts.map((user) => {
+                  const vote = expertVotes[user.pseudo];
+                  return (
+                    <img
+                      key={user.pseudo}
+                      src={user.userImage || default_user}
+                      title={user.pseudo}
+                      className={`w-6 h-6 rounded-full ring-2 ${borderColor(vote)}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       ))}

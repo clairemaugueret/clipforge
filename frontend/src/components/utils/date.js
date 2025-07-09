@@ -1,4 +1,3 @@
-// src/utils/date.js
 export function formatHumanDate(dateStr) {
   const date = new Date(dateStr);
   const now = new Date();
