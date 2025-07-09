@@ -14,12 +14,28 @@ function populateClipData(query) {
 function extractClipId(link) {
   try {
     const url = new URL(link);
-    if (url.hostname.includes("twitch.tv") && url.pathname.includes("/clip/")) {
-      return url.pathname.split("/clip/")[1];
+    const host = url.hostname;
+
+    // 1) URL directe de clips.twitch.tv
+    //    ex. https://clips.twitch.tv/MonClipUnique
+    if (host === "clips.twitch.tv") {
+      // url.pathname === "/MonClipUnique"
+      return url.pathname.slice(1);
     }
+
+    // 2) URL “in situ” sur twitch.tv
+    //    ex. https://www.twitch.tv/Chaîne/clip/MonClipUnique
+    if (host.includes("twitch.tv") && url.pathname.includes("/clip/")) {
+      // on découpe après "/clip/"
+      // et on retire tout ce qui pourrait suivre (query, slash, etc.)
+      return url.pathname.split("/clip/")[1].split("/")[0];
+    }
+
+    // 3) Cas paramètre ?clip=ID
     if (url.searchParams.has("clip")) {
       return url.searchParams.get("clip");
     }
+
     return null;
   } catch (err) {
     return null;
@@ -31,7 +47,7 @@ async function isClipAlreadyProposed(clipId) {
   const existingClip = await populateClipData(
     Clips.findOne({ clip_id: clipId })
   );
-  return !!existingClip; // '!!' permet convertir en booléen, force la valeur à être soit true soit false
+  return !!existingClip; // NB: '!!' permet convertir en booléen, force la valeur à être soit true soit false
 }
 
 // FONCTION UTILITAIRE - Vérifier si un clip existe, sinon renvoyer une erreur 404
