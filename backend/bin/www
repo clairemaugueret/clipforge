@@ -3,42 +3,74 @@
 /**
  * Module dependencies.
  */
-const app = require("../app");
 const http = require("http");
+const app = require("../app");
+const sequelize = require("../models/connection"); // Ton fichier connection.js
 
 /**
  * Get port from environment and store in Express.
  */
-const PORT = normalizePort(process.env.PORT || "3001");
-app.set("port", PORT);
+const port = normalizePort(process.env.PORT || "3001");
+app.set("port", port);
 
 /**
- * Create HTTP server.
+ * Teste la connexion à la base de données
+ * puis démarre le serveur HTTP
  */
-const server = http.createServer(app);
+(async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("✅ Connexion à la base MariaDB réussie");
 
-/**
- * Listen on provided port, on all network interfaces.
- */
-server.listen(PORT, () => {
-  console.log(`✅ Backend API running on http://localhost:${PORT}`);
-});
+    const server = http.createServer(app);
+
+    server.listen(port);
+    server.on("error", onError);
+    server.on("listening", onListening);
+  } catch (err) {
+    console.error("❌ Connexion DB échouée :", err.message);
+    process.exit(1); // Stoppe le process si la connexion échoue
+  }
+})();
 
 /**
  * Normalize a port into a number, string, or false.
  */
 function normalizePort(val) {
-  const port = parseInt(val, 10);
-
-  if (isNaN(port)) {
-    // named pipe
-    return val;
-  }
-
-  if (port >= 0) {
-    // port number
-    return port;
-  }
-
+  const portNum = parseInt(val, 10);
+  if (isNaN(portNum)) return val; // named pipe
+  if (portNum >= 0) return portNum; // port number
   return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+function onError(error) {
+  if (error.syscall !== "listen") throw error;
+
+  const bind = typeof port === "string" ? "Pipe " + port : "Port " + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case "EACCES":
+      console.error(`${bind} nécessite des privilèges élevés`);
+      process.exit(1);
+      break;
+    case "EADDRINUSE":
+      console.error(`${bind} est déjà utilisé`);
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+function onListening() {
+  const addr = this.address();
+  const bind = typeof addr === "string" ? `pipe ${addr}` : `port ${addr.port}`;
+  console.log(`🚀 Serveur backend démarré et en écoute sur ${bind}`);
 }

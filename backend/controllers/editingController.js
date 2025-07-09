@@ -1,4 +1,4 @@
-const Clips = require("../models/clips");
+const Clip = require("../models/Clip");
 const { checkBody } = require("../utils/checkBody");
 const { findClipOr404, populateClipData } = require("../utils/clipsUtils");
 const { isEditorOr403 } = require("../utils/usersUtils");
@@ -23,10 +23,11 @@ async function clipEditingStart(req, res) {
         .json({ result: false, error: "Editing not allowed for this clip" });
     }
 
-    clip.editor = req.user._id;
-    clip.editProgress = "en cours";
-
-    await clip.save();
+    // Mettre à jour l'éditeur et l'état d'édition
+    await clip.update({
+      editorId: req.user.twitch_id,
+      edit_progress: "IN_PROGRESS",
+    });
 
     // Peupler avant d’envoyer
     await populateClipData(clip);
@@ -55,19 +56,20 @@ async function clipEditingEnd(req, res) {
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
-    if (!clip.editable || clip.editProgress !== "en cours") {
+    if (!clip.editable || clip.edit_progress !== "IN_PROGRESS") {
       return res.status(400).json({
         result: false,
         error: "This clip is not currently being edited",
       });
     }
 
-    if (!isEditorOr403(clip, req.user._id, res)) return;
+    if (!isEditorOr403(clip, req.user.twitch_id, res)) return;
 
-    clip.editProgress = "terminé";
-    clip.editable = false; // Pour enlever le marque "à éditer" du clip
-
-    await clip.save();
+    // Marquer l'édition comme terminée
+    await clip.update({
+      edit_progress: "TERMINATED",
+      editable: false, // Enlever le marqueur "à éditer"
+    });
 
     // Peupler avant d’envoyer
     await populateClipData(clip);

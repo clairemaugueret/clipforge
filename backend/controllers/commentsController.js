@@ -1,4 +1,4 @@
-const Clips = require("../models/clips");
+const Clip = require("../models/Clip");
 const { checkBody } = require("../utils/checkBody");
 const { findClipOr404, populateClipData } = require("../utils/clipsUtils");
 const { sanitizeCommentText } = require("../utils/commentsUtils");
@@ -14,8 +14,8 @@ async function addNewCommentToClip(req, res) {
   const { clipId, text } = req.body;
 
   // Validation du contenu
-  const validComment = sanitizeCommentText(text);
-  if (!validComment) {
+  const sanitizedText = sanitizeCommentText(text);
+  if (!sanitizedText) {
     return res.status(400).json({
       result: false,
       error: "Comment must be between 2 and 400 characters",
@@ -26,14 +26,30 @@ async function addNewCommentToClip(req, res) {
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
-    clip.comments.push({
-      user: req.user._id,
-      text: validComment,
-      date: Date.now(),
-      views: [req.user._id],
+    // On s'assure que comments est bien un tableau
+    let updatedComments = [];
+    try {
+      updatedComments = JSON.parse(clip.comments);
+      if (!Array.isArray(updatedComments)) {
+        updatedComments = [];
+      }
+    } catch (err) {
+      console.error("Invalid JSON in clip.comments:", err);
+      updatedComments = [];
+    }
+
+    // Ajouter le nouveau commentaire
+    updatedComments.push({
+      userId: req.user.twitch_id,
+      userName: req.user.username,
+      userAvatar: req.user.avatar_url,
+      text: sanitizedText,
+      createdAt: new Date().toISOString(),
+      views: [req.user.twitch_id],
     });
 
-    await clip.save();
+    // Mettre à jour la colonne JSON dans la DB
+    await clip.update({ comments: updatedComments });
 
     // Peupler avant d’envoyer
     await populateClipData(clip);
@@ -60,18 +76,21 @@ async function addNewViewToAllComments(req, res) {
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
-    const userId = req.user._id;
+    const userId = req.user.twitch_id;
     let updated = false;
 
     // Ajouter l'id de l'utilisateur aux vues de chaque commentaire s'il n'est pas déjà présent
-    clip.comments.forEach((comment) => {
+    const updatedComments = (clip.comments || []).map((comment) => {
       if (!comment.views.includes(userId)) {
         comment.views.push(userId);
         updated = true;
       }
+      return comment;
     });
 
-    if (updated) await clip.save();
+    if (updated) {
+      await clip.update({ comments: updatedComments });
+    }
 
     // Peupler avant d’envoyer
     await populateClipData(clip);

@@ -1,4 +1,4 @@
-const User = require("../models/users");
+const User = require("../models/User");
 
 // MIDDLEWARE: Vérification de l'authentification
 // Utilisé pour protéger les routes nécessitant une authentification
@@ -11,7 +11,9 @@ const checkAuth = async (req, res, next) => {
       return res.status(401).json({ result: false, error: "Token missing" });
     }
 
-    const user = await User.findOne({ token });
+    // Recherche de l'utilisateur avec Sequelize
+    const user = await User.findOne({ where: { token } });
+
     if (!user) {
       return res.status(403).json({ result: false, error: "Invalid token" });
     }

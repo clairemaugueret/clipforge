@@ -1,19 +1,19 @@
-const Users = require("../models/users");
+const User = require("../models/User");
 
 // CONTROLLER - Récupérer tous les utilisateurs whitelistés
 async function getAllUsers(req, res) {
   try {
-    const users = await Users.find(
-      { whitelist: true }, // Filtrer uniquement les whitelistés
-      {
-        __v: 0,
-        token: 0,
-        twitch_id: 0,
-        twitch_access_token: 0,
-        twitch_refresh_token: 0,
-        twitch_token_expires_at: 0,
-      } // Exclure les champs sensibles (token, twitch_id, etc..) et version du doc
-    );
+    const users = await User.findAll({
+      where: { whitelist: true }, // Filtrer uniquement les whitelistés
+      attributes: {
+        exclude: [
+          "token",
+          "twitch_access_token",
+          "twitch_refresh_token",
+          "twitch_token_expires_at",
+        ], // Exclure les champs sensibles
+      },
+    });
 
     if (!users || users.length === 0) {
       return res.status(404).json({

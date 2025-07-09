@@ -1,5 +1,5 @@
-const Clips = require("../models/clips");
-const User = require("../models/users");
+const Clip = require("../models/Clip");
+const User = require("../models/User");
 const { checkBody } = require("../utils/checkBody");
 const { fetchTwitchClipData } = require("../services/twitchClips");
 const { extractClipId, isClipAlreadyProposed } = require("../utils/clipsUtils");
@@ -66,30 +66,41 @@ async function createClip(req, res) {
   const clipData = result.clip;
 
   try {
-    const newClip = new Clips({
+    const comments = [];
+    const sanitizedText = sanitizeCommentText(text);
+    if (sanitizedText) {
+      comments.push({
+        userId: req.user.twitch_id,
+        userName: req.user.username,
+        userAvatar: req.user.avatar_url,
+        text: sanitizedText,
+        createdAt: new Date().toISOString(),
+        views: [req.user.twitch_id],
+      });
+    }
+
+    const votes = [
+      {
+        userId: req.user.twitch_id,
+        userName: req.user.username,
+        userAvatar: req.user.avatar_url,
+        result: "OK",
+      }, // Initialiser avec un vote OK de l'auteur
+    ];
+
+    const newClip = await Clip.create({
       link,
       clip_id: clipId,
       embed_url: clipData.embed_url,
       image: clipData.thumbnail_url,
-      author: req.user._id,
-      createdAt: Date.now(),
+      authorId: req.user.twitch_id,
       subject,
       tags,
+      createdAt: new Date().toISOString(),
       editable: editable || false,
-      comments: sanitizeCommentText(text)
-        ? [
-            {
-              user: req.user._id,
-              text: sanitizeCommentText(text),
-              date: Date.now(),
-              views: [req.user._id],
-            },
-          ]
-        : [], // Ajouter un commentaire initial si le texte est fourni et valide
-      votes: [{ user: req.user._id, result: "OK" }], // Initialiser avec un vote OK de l'auteur
+      comments,
+      votes,
     });
-
-    await newClip.save();
 
     // Peupler avant d’envoyer
     await populateClipData(newClip);
@@ -108,7 +119,10 @@ async function createClip(req, res) {
 // CONTROLLER -  Récupérer tous les clips de la DB
 async function getAllClips(req, res) {
   try {
-    const clips = await populateClipData(Clips.find());
+    const clips = await Clip.findAll();
+
+    // Peupler avant d’envoyer
+    await populateClipData(clips);
 
     if (!clips || clips.length === 0) {
       return res.status(404).json({
@@ -146,27 +160,49 @@ async function updateClip(req, res) {
     if (!clip) return; // La fonction a déjà renvoyé l'erreur 404 donc ici on stoppe juste l'exécution
 
     // Vérifier que l'utilisateur courant est bien l'auteur
-    if (!isAuthorOr403(clip, req.user._id, res)) return;
+    if (!isAuthorOr403(clip, req.user.twitch_id, res)) return;
 
     // Mettre à jour les champs autorisés
-    clip.subject = subject;
-    clip.tags = tags;
-    if (typeof editable !== "undefined") {
-      clip.editable = editable;
-    }
+    await clip.update({
+      subject,
+      tags,
+      editable: editable ?? clip.editable,
+    });
 
     // Si un nouveau commentaire est fourni avec l'update
     const validComment = sanitizeCommentText(text);
     if (validComment) {
-      clip.comments.push({
-        user: req.user._id,
-        text: validComment,
-        date: Date.now(),
-        views: [req.user._id],
-      });
-    }
+      // Sécurise le parsing des commentaires
+      let updatedComments = [];
 
-    await clip.save();
+      if (typeof clip.comments === "string") {
+        try {
+          updatedComments = JSON.parse(clip.comments);
+          if (!Array.isArray(updatedComments)) {
+            updatedComments = [];
+          }
+        } catch (err) {
+          console.error("Invalid JSON in clip.comments:", err);
+          updatedComments = [];
+        }
+      } else if (Array.isArray(clip.comments)) {
+        updatedComments = clip.comments; // déjà un tableau
+      } else {
+        updatedComments = [];
+      }
+
+      // Ajoute le nouveau commentaire
+      updatedComments.push({
+        userId: req.user.twitch_id,
+        userName: req.user.username,
+        userAvatar: req.user.avatar_url,
+        text: validComment,
+        createdAt: new Date().toISOString(),
+        views: [req.user.twitch_id],
+      });
+
+      await clip.update({ comments: updatedComments });
+    }
 
     // Peupler avant d’envoyer
     await populateClipData(clip);
@@ -200,9 +236,7 @@ async function clipPublished(req, res) {
     if (!isExpertOr403(req.user, res)) return;
 
     // Mettre à jour le statut du clip
-    clip.status = "publié";
-
-    await clip.save();
+    await clip.update({ status: "PUBLISHED" });
 
     // Peupler avant d’envoyer
     await populateClipData(clip);
@@ -232,48 +266,75 @@ async function addVoteToClip(req, res) {
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
+    // Sécurise le parsing des votes
+    let updatedVotes = [];
+
+    if (typeof clip.votes === "string") {
+      try {
+        updatedVotes = JSON.parse(clip.votes);
+        if (!Array.isArray(updatedVotes)) {
+          updatedVotes = [];
+        }
+      } catch (err) {
+        console.error("Invalid JSON in clip.votes:", err);
+        updatedVotes = [];
+      }
+    } else if (Array.isArray(clip.votes)) {
+      updatedVotes = clip.votes; // déjà un tableau
+    } else {
+      updatedVotes = [];
+    }
+
     // Vérifie si l’utilisateur a déjà voté
-    const existingVoteIndex = clip.votes.findIndex(
-      (vote) => vote.user.toString() === req.user._id.toString()
+    const existingVoteIndex = updatedVotes.findIndex(
+      (v) => v.userId === req.user.twitch_id
     );
 
     if (existingVoteIndex !== -1) {
       // Met à jour le vote existant
-      clip.votes[existingVoteIndex].result = vote;
+      updatedVotes[existingVoteIndex].result = vote;
     } else {
       // Ajoute un nouveau vote
-      clip.votes.push({ user: req.user._id, result: vote });
+      updatedVotes.push({
+        userId: req.user.twitch_id,
+        userName: req.user.username,
+        userAvatar: req.user.avatar_url,
+        result: vote,
+      });
     }
 
-    // Vérifier si tous les experts ont voté
-    const experts = await User.find({ status: "expert" }).select("_id");
-    const expertIds = experts.map((user) => user._id.toString());
-    const votedExpertIds = clip.votes
-      .map((vote) => vote.user.toString())
+    // Vérifie si tous les experts ont voté
+    const experts = await User.findAll({ where: { role: "EXPERT" } });
+    const expertIds = experts.map((u) => u.twitch_id);
+
+    const votedExpertIds = updatedVotes
+      .map((v) => v.userId)
       .filter((id) => expertIds.includes(id));
 
-    let allExpertsVoted = false;
-    if (
-      expertIds.length > 0 &&
-      expertIds.every((id) => votedExpertIds.includes(id))
-    ) {
-      allExpertsVoted = true;
-    }
+    const allExpertsVoted = expertIds.every((id) =>
+      votedExpertIds.includes(id)
+    );
 
-    // Statut selon les votes des experts
+    // Toujours recalculer le statut
     if (allExpertsVoted) {
-      const okVotes = clip.votes.filter((vote) => vote.result === "OK").length;
-      const koVotes = clip.votes.filter((vote) => vote.result === "KO").length;
+      const okVotes = updatedVotes.filter((v) => v.result === "OK").length;
+      const koVotes = updatedVotes.filter((v) => v.result === "KO").length;
 
       if (okVotes === expertIds.length && !clip.editable) {
-        clip.status = "prêt à publier";
+        clip.status = "READY";
       } else if (koVotes >= 2) {
-        clip.status = "écarté";
+        clip.status = "DISCARDED";
+      } else {
+        clip.status = "PROPOSED";
       }
-      // Sinon, ne rien changer (statut reste inchangé)
+    } else {
+      clip.status = "PROPOSED"; // Si tous les experts n'ont pas voté
     }
 
-    await clip.save();
+    await clip.update({
+      votes: updatedVotes,
+      status: clip.status,
+    });
 
     // Peupler avant d’envoyer
     await populateClipData(clip);

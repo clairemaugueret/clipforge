@@ -1,4 +1,4 @@
-const Users = require("../models/users");
+const User = require("../models/User");
 const uid2 = require("uid2");
 const { checkBody } = require("../utils/checkBody");
 const {
@@ -25,12 +25,14 @@ async function authWithTwitch(req, res) {
     const twitchUser = await getTwitchUser(access_token);
 
     // Vérifier si l’utilisateur existe déjà dans la DB
-    let user = await Users.findOne({ twitch_id: twitchUser.id });
+    let user = await User.findOne({
+      where: { twitch_id: twitchUser.id },
+    });
     let userJustCreated = false;
 
     if (!user) {
       // Nouveau user : création
-      user = new Users({
+      user = await User.create({
         twitch_id: twitchUser.id,
         username: twitchUser.display_name,
         avatar_url: twitchUser.profile_image_url,
@@ -49,24 +51,24 @@ async function authWithTwitch(req, res) {
       }
 
       // User existant : MAJ (au cas où Twitch aurait changé les infos)
-      user.username = twitchUser.display_name;
-      user.avatar_url = twitchUser.profile_image_url;
-      user.twitch_access_token = access_token;
-      user.twitch_refresh_token = refresh_token;
-      user.twitch_token_expires_at = new Date(Date.now() + expires_in * 1000);
+      await user.update({
+        username: twitchUser.display_name,
+        avatar_url: twitchUser.profile_image_url,
+        twitch_access_token: access_token,
+        twitch_refresh_token: refresh_token,
+        twitch_token_expires_at: new Date(Date.now() + expires_in * 1000),
+      });
     }
-
-    // Sauvegarder en DB
-    await user.save();
 
     // Réponse au frontend avec status 201 (creation) ou 200 (MAJ OK)
     const responsePayload = {
       result: true,
       user: {
+        twitch_id: user.twitch_id,
         token: user.token,
         username: user.username,
         avatar_url: user.avatar_url,
-        status: user.status, // Simple user ou expert
+        role: user.role, // Simple user ou expert
       },
     };
 
@@ -86,7 +88,9 @@ async function authWithTwitch(req, res) {
 
 // FONCTION UTILITAIRE - Vérifier si un token Twitch est valide
 async function getValidTwitchToken(appToken) {
-  const user = await Users.findOne({ token: appToken });
+  const user = await User.findOne({
+    where: { token: appToken },
+  });
 
   if (!user) {
     throw new Error("User not found");
@@ -105,22 +109,24 @@ async function getValidTwitchToken(appToken) {
     const tokenData = await refreshTwitchToken(user.twitch_refresh_token);
 
     // Mettre à jour les tokens en DB
-    user.twitch_access_token = tokenData.access_token;
-    user.twitch_refresh_token = tokenData.refresh_token;
-    user.twitch_token_expires_at = new Date(
-      Date.now() + tokenData.expires_in * 1000
-    );
-    await user.save();
+    await user.update({
+      twitch_access_token: tokenData.access_token,
+      twitch_refresh_token: tokenData.refresh_token,
+      twitch_token_expires_at: new Date(
+        Date.now() + tokenData.expires_in * 1000
+      ),
+    });
 
     return user.twitch_access_token;
   } catch (err) {
     console.error("Failed to refresh Twitch token:", err.message);
 
     // Si refresh échoue, invalider les tokens Twitch en DB
-    user.twitch_access_token = null;
-    user.twitch_refresh_token = null;
-    user.twitch_token_expires_at = null;
-    await user.save();
+    await user.update({
+      twitch_access_token: null,
+      twitch_refresh_token: null,
+      twitch_token_expires_at: null,
+    });
 
     // Demander au frontend de refaire une connexion Twitch
     throw new Error(
