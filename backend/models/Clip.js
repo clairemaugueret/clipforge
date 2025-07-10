@@ -38,8 +38,18 @@ Clip.init(
       allowNull: true,
     },
     status: {
-      type: DataTypes.ENUM("PROPOSED", "READY", "PUBLISHED", "DISCARDED"),
+      type: DataTypes.ENUM(
+        "PROPOSED",
+        "READY",
+        "PUBLISHED",
+        "DISCARDED",
+        "ARCHIVED"
+      ),
       defaultValue: "PROPOSED",
+    },
+    published_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
 
     // Nouveau : tableau d'objets comment { userId, userName, userAvatar, text, created_at, views: [twitch_id] }

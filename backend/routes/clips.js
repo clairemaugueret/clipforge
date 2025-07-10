@@ -8,6 +8,8 @@ const {
   updateClip,
   clipPublished,
   addVoteToClip,
+  archiveOldClips,
+  getArchivedClips,
 } = require("../controllers/clipsController");
 const {
   clipEditingStart,
@@ -25,8 +27,8 @@ router.get("/all", getAllClips);
 // Données de sortie: clips (tableau de tous les clips provenant de la DB) + count (nombre de clips dans la DB)
 
 // GET /clips/:id => Récupérer les infos d’un clip
-router.get("/:id", checkAuth, getClipInfo);
-// Données entrée: req.body.token (token de l'app) req.params.id (id du clip Twitch)
+router.get("/twitchinfo", checkAuth, getClipInfo);
+// Données entrée: req.body.token (token de l'app) req.body.link
 // Données de sortie: clipData (données du clip avec info id, url, embed_url, title, thumbnail_url, etc. provenant de l'API Twitch)
 
 // POST /clips/new => Créer une proposition de clip
@@ -55,7 +57,7 @@ router.put("/update", checkAuth, updateClip);
 // Données de sortie: clip (données éditées du clip provenant de la DB) + message ("Clip successfully updated")
 
 // PUT /clips/updatestatus => Mettre à jour le statut d'un clip après publication
-router.put("/statusupdate", checkAuth, clipPublished);
+router.put("/published", checkAuth, clipPublished);
 // Données entrée: req.body.token (token de l'app), req.body.clipId (id du clip Twitch)
 // Données de sortie: clip (données éditées du clip provenant de la DB) + message ("Clip pusblished")
 
@@ -68,5 +70,15 @@ router.put("/viewcomments", checkAuth, addNewViewToAllComments);
 router.put("/vote", checkAuth, addVoteToClip);
 // Données entrée: req.body.token (token de l'app), req.body.clipId (id du clip Twitch), req.body.vote (vote du user)
 // Données de sortie: clip (données éditées du clip provenant de la DB) + message ("Vote successfully saved")
+
+// PUT /clips/archiving => Archive les clips publiés il y a plus de 2 semaines
+router.put("/archiving", archiveOldClips);
+// Données entrée: aucune
+// Données de sortie: message ("X clip(s) archived")
+
+// GET /clips/archives => Récupère tous les clips archivés
+router.get("/archives", checkAuth, getArchivedClips);
+// Données entrée: req.body.token (token de l'app)
+// Données de sortie: clips (tableau de tous les clips archivés provenant de la DB) + count (nombre de clips archivés dans la DB)
 
 module.exports = router;

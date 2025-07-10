@@ -1,5 +1,6 @@
 const Clip = require("../models/Clip");
 const User = require("../models/User");
+const dayjs = require("dayjs"); // dayjs pour les dates
 const { checkBody } = require("../utils/checkBody");
 const { fetchTwitchClipData } = require("../services/twitchClips");
 const { extractClipId, isClipAlreadyProposed } = require("../utils/clipsUtils");
@@ -9,7 +10,7 @@ const { sanitizeCommentText } = require("../utils/commentsUtils");
 
 // CONTROLLER - Récupérer les infos d’un clip via l’API Twitch
 async function getClipInfo(req, res) {
-  const clipId = req.params.id;
+  const clipId = extractClipId(req.body.link);
   const appToken = req.body.token;
 
   const result = await fetchTwitchClipData(clipId, appToken);
@@ -119,7 +120,7 @@ async function createClip(req, res) {
 // CONTROLLER -  Récupérer tous les clips de la DB
 async function getAllClips(req, res) {
   try {
-    const clips = await Clip.findAll();
+    const clips = await Clip.find({ status: { $ne: "ARCHIVED" } }); // tous les clips sauf les archivés
 
     // Peupler avant d’envoyer
     await populateClipData(clips);
@@ -236,7 +237,10 @@ async function clipPublished(req, res) {
     if (!isExpertOr403(req.user, res)) return;
 
     // Mettre à jour le statut du clip
-    await clip.update({ status: "PUBLISHED" });
+    await clip.update({
+      status: "PUBLISHED",
+      published_at: new Date(),
+    });
 
     // Peupler avant d’envoyer
     await populateClipData(clip);
@@ -350,6 +354,44 @@ async function addVoteToClip(req, res) {
   }
 }
 
+// CONTROLLER - Archiver les clips publiés il y a plus de 2 semaines
+async function archiveOldClips(req, res) {
+  try {
+    const period = dayjs().subtract(14, "day").toDate(); // modifier ici le nombre de jours si on veut modifier la période avant l'archivage
+
+    // Mettre à jour les clips trop anciens
+    const result = await Clip.updateMany(
+      { status: "PUBLISHED", published_at: { $lt: period } },
+      { $set: { status: "ARCHIVED" } }
+    );
+
+    res.status(200).json({
+      result: true,
+      message: `${result.modifiedCount} clip(s) archived`,
+    });
+  } catch (error) {
+    console.error("Error archiving clips:", error);
+    res.status(500).json({ error: "Server error while archiving clips" });
+  }
+}
+
+// CONTROLLER - Recherche de tous les clips archivés
+async function getArchivedClips(req, res) {
+  try {
+    const archivedClips = await Clip.find({ status: "ARCHIVED" });
+    res.status(200).json({
+      result: true,
+      count: archivedClips.length,
+      clips: archivedClips,
+    });
+  } catch (error) {
+    console.error("Error fetching archived clips:", error);
+    res
+      .status(500)
+      .json({ error: "Server error while fetching archived clips" });
+  }
+}
+
 module.exports = {
   getClipInfo,
   createClip,
@@ -357,4 +399,6 @@ module.exports = {
   updateClip,
   clipPublished,
   addVoteToClip,
+  archiveOldClips,
+  getArchivedClips,
 };

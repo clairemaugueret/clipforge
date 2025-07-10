@@ -3,8 +3,8 @@
 /**
  * Module dependencies.
  */
-const http = require("http");
 const app = require("../app");
+const http = require("http");
 const sequelize = require("../models/connection"); // Ton fichier connection.js
 
 /**
@@ -20,7 +20,9 @@ app.set("port", port);
 (async () => {
   try {
     await sequelize.authenticate();
-    console.log("✅ Connexion à la base MariaDB réussie");
+    console.log(
+      `✅ Connexion à la base MariaDB "${process.env.DB_NAME}" réussie`
+    );
 
     const server = http.createServer(app);
 
