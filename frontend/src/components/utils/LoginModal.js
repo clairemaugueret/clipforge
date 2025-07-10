@@ -1,8 +1,19 @@
 import twitchLogo from "../images/twitch_logo_white.png";
 
 export default function LoginModal({ onClose }) {
+  //CLAIRE
+  const CLIENT_ID = process.env.REACT_APP_TWITCH_CLIENT_ID;
+  const REDIRECT_URI = process.env.REACT_APP_TWITCH_REDIRECT_URI;
+  const SCOPE = "user:read:email";
+  //CLAIRE
+
   const handleTwitchLogin = () => {
-    window.location.href = "https://id.twitch.tv/oauth2/authorize?...";
+    // CLAIRE
+    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
+      REDIRECT_URI
+    )}&response_type=code&scope=${encodeURIComponent(SCOPE)}`;
+    window.location.href = authUrl;
+    //CLAIRE
   };
 
   return (

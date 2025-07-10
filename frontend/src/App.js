@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ClipList from "./components/ClipList";
 import ClipViewer from "./components/ClipViewer";
 import ClipForm from "./components/ClipForm";
@@ -6,6 +6,10 @@ import TagFilterModal from "./components/utils/TagFilterModal";
 import LoginModal from "./components/utils/LoginModal";
 import { formatHumanDate } from "./components/utils/date";
 import default_user from "./components/images/default_user.png";
+//CLAIRE
+import { useSelector, useDispatch } from "react-redux";
+import { login, logout } from "./reducers/userSlice";
+//CLAIRE
 
 const Users = [
   {
@@ -182,6 +186,11 @@ const initialClips = [
 ];
 
 function App() {
+  //CLAIRE
+  const user = useSelector((state) => state.user);
+  const dispatch = useDispatch();
+  //CLAIRE
+
   const [clips, setClips] = useState(initialClips);
   const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -308,17 +317,63 @@ function App() {
           (clip.tags || []).some((tag) => selectedTags.includes(tag))
         );
 
+  //CLAIRE
+  //Gestion de la déconnexion
+  const userLogout = () => {
+    if (user.username) {
+      dispatch(logout());
+      alert("✅ Déconnexion réussie !");
+    }
+  };
+
+  //Requête vers le back pour se connecter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+
+    if (code) {
+      fetch("http://localhost:3001/clipmanager/users/authtwitch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.result) {
+            dispatch(
+              login({
+                token: data.user.token,
+                username: data.user.username,
+                avatar_url: data.user.avatar_url,
+              })
+            );
+            window.history.replaceState({}, document.title, "/"); // Nettoyer l'URL
+          } else {
+            console.error(data.error);
+          }
+        })
+        .catch((err) => console.error("Erreur backend :", err));
+    }
+  }, [dispatch]);
+  //CLAIRE
+
   return (
     <div className="h-screen flex flex-col">
       <header className="bg-indigo-950 text-white p-4 shadow-md flex justify-between items-center">
         <h1 className="text-xl font-bold">Mes Clips</h1>
-        <button onClick={() => setShowLoginModal(true)}>
+        {/* CLAIRE */}
+        <button
+          onClick={() =>
+            user.username ? userLogout() : setShowLoginModal(true)
+          }
+        >
           <img
-            src={default_user}
-            alt="Se connecter"
+            src={user.avatar_url || default_user}
+            alt={user.username || "Se connecter"}
             className="w-8 h-8 rounded-full border border-white hover:ring-2 ring-indigo-400"
           />
         </button>
+        {/* CLAIRE */}
       </header>
 
       <div className="flex flex-1 h-0">
