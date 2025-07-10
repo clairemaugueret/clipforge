@@ -7,6 +7,7 @@ const { extractClipId, isClipAlreadyProposed } = require("../utils/clipsUtils");
 const { findClipOr404, populateClipData } = require("../utils/clipsUtils");
 const { isAuthorOr403, isExpertOr403 } = require("../utils/usersUtils");
 const { sanitizeCommentText } = require("../utils/commentsUtils");
+const { Op } = require("sequelize");
 
 // CONTROLLER - Récupérer les infos d’un clip via l’API Twitch
 async function getClipInfo(req, res) {
@@ -120,7 +121,11 @@ async function createClip(req, res) {
 // CONTROLLER -  Récupérer tous les clips de la DB
 async function getAllClips(req, res) {
   try {
-    const clips = await Clip.find({ status: { $ne: "ARCHIVED" } }); // tous les clips sauf les archivés
+    const clips = await Clip.findAll({
+      where: {
+        status: { [Op.ne]: "ARCHIVED" },
+      },
+    }); // tous les clips sauf les archivés
 
     // Peupler avant d’envoyer
     await populateClipData(clips);
@@ -378,7 +383,9 @@ async function archiveOldClips(req, res) {
 // CONTROLLER - Recherche de tous les clips archivés
 async function getArchivedClips(req, res) {
   try {
-    const archivedClips = await Clip.find({ status: "ARCHIVED" });
+    const archivedClips = await Clip.findAll({
+      where: { status: "ARCHIVED" },
+    });
     res.status(200).json({
       result: true,
       count: archivedClips.length,
