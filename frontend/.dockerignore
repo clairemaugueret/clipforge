@@ -1,0 +1,16 @@
+node_modules
+yarn-error.log
+
+.git
+.gitignore
+
+Dockerfile
+.dockerignore
+
+*.swp
+*.log
+*.tmp
+.vscode/
+.idea/
+
+backend/
