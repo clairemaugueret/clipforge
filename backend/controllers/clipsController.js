@@ -4,7 +4,11 @@ const dayjs = require("dayjs"); // dayjs pour les dates
 const { checkBody } = require("../utils/checkBody");
 const { fetchTwitchClipData } = require("../services/twitchClips");
 const { extractClipId, isClipAlreadyProposed } = require("../utils/clipsUtils");
-const { findClipOr404, populateClipData } = require("../utils/clipsUtils");
+const {
+  findClipOr404,
+  populateClipData,
+  sanitizeTitle,
+} = require("../utils/clipsUtils");
 const { isAuthorOr403, isExpertOr403 } = require("../utils/usersUtils");
 const { sanitizeCommentText } = require("../utils/commentsUtils");
 const { Op } = require("sequelize");
@@ -67,6 +71,11 @@ async function createClip(req, res) {
 
   const clipData = result.clip;
 
+  const sanitizedTitle = sanitizeTitle(subject);
+  if (!sanitizedTitle) {
+    return res.status(400).json({ result: false, error: "Invalid Title" });
+  }
+
   try {
     const comments = [];
     const sanitizedText = sanitizeCommentText(text);
@@ -125,6 +134,7 @@ async function getAllClips(req, res) {
       where: {
         status: { [Op.ne]: "ARCHIVED" },
       },
+      order: [["createdAt", "DESC"]], // Trie du plus récent au plus ancien
     }); // tous les clips sauf les archivés
 
     // Peupler avant d’envoyer
@@ -385,6 +395,7 @@ async function getArchivedClips(req, res) {
   try {
     const archivedClips = await Clip.findAll({
       where: { status: "ARCHIVED" },
+      order: [["createdAt", "DESC"]], // Trie du plus récent au plus ancien
     });
     res.status(200).json({
       result: true,

@@ -22,8 +22,24 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
-app.use("/clipmanager/", indexRouter);
+app.use("/", indexRouter);
 app.use("/clipmanager/users", usersRouter);
 app.use("/clipmanager/clips", clipsRouter);
+
+/* ------------------------------
+   404 pour tout le reste
+------------------------------ */
+app.use((req, res) => {
+  res.status(404).send(`
+    <html>
+      <head><title>404 - Not Found</title></head>
+      <body style="font-family: Arial; text-align: center; margin-top: 50px;">
+        <h1>404 - Page non trouvée ❌</h1>
+        <p>L’URL demandée <code>${req.originalUrl}</code> n’existe pas.</p>
+        <a href="/">⬅️ Retour à la page d’accueil</a>
+      </body>
+    </html>
+  `);
+});
 
 module.exports = app;
