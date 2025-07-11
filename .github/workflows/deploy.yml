@@ -29,7 +29,7 @@ jobs:
             docker build -t clipmanager-backend /home/debian/docker/evoxia/clipmanager/backend
             cd /home/debian/docker
             docker compose up -d --force-recreate clipmanager-backend
-            rm -rf /home/debian/docker/evoxia/clipmanager
+            sudo rm -rf /home/debian/docker/evoxia/clipmanager || true
 
   deploy-frontend:
     name: Deploy frontend only
@@ -53,4 +53,4 @@ jobs:
             docker build -t clipmanager-frontend /home/debian/docker/evoxia/clipmanager/frontend
             cd /home/debian/docker
             docker compose up -d --force-recreate clipmanager-frontend
-            rm -rf /home/debian/docker/evoxia/clipmanager
+            sudo rm -rf /home/debian/docker/evoxia/clipmanager || true
