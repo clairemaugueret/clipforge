@@ -221,9 +221,20 @@ async function findClipOr404(clipId, res) {
   }
 }
 
+// FONCTION UTILITAIRE - Valide et nettoie un commentaire
+function sanitizeTitle(title) {
+  if (typeof title !== "string") return null;
+  const trimmed = title.trim();
+  if (trimmed.length >= 2 && trimmed.length <= 100) {
+    return trimmed;
+  }
+  return null;
+}
+
 module.exports = {
   populateClipData,
   extractClipId,
   isClipAlreadyProposed,
   findClipOr404,
+  sanitizeTitle,
 };
