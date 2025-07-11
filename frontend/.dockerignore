@@ -13,4 +13,4 @@ Dockerfile
 .vscode/
 .idea/
 
-frontend/
+backend/

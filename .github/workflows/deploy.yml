@@ -1,0 +1,56 @@
+name: Deploy Backend or Frontend
+
+on:
+  push:
+    branches:
+      - backend-prod
+      - frontend-prod
+
+jobs:
+  deploy-backend:
+    name: Deploy backend only
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/backend-prod'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: SSH deploy backend
+        uses: appleboy/ssh-action@v0.1.2
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf /home/docker/evoxia/clipmanager
+            git clone --branch backend-prod ${{ secrets.REPO_SSH }} /home/docker/evoxia/clipmanager
+
+            docker build -t clipmanager-backend /home/docker/evoxia/clipmanager/backend
+            cd /home/docker
+            docker compose up -d --force-recreate clipmanager-backend
+            rm -rf /home/docker/evoxia/clipmanager
+
+  deploy-frontend:
+    name: Deploy frontend only
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/frontend-prod'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: SSH deploy frontend
+        uses: appleboy/ssh-action@v0.1.2
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf /home/docker/evoxia/clipmanager
+            git clone --branch frontend-prod ${{ secrets.REPO_SSH }} /home/docker/evoxia/clipmanager
+
+            docker build -t clipmanager-frontend /home/docker/evoxia/clipmanager/frontend
+            cd /home/docker
+            docker compose up -d --force-recreate clipmanager-frontend
+            rm -rf /home/docker/evoxia/clipmanager
