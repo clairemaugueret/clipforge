@@ -23,13 +23,13 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            rm -rf /home/docker/evoxia/clipmanager
-            git clone --branch backend-prod ${{ secrets.REPO_SSH }} /home/docker/evoxia/clipmanager
+            rm -rf /home/debian/docker/evoxia/clipmanager
+            git clone --branch backend-prod ${{ secrets.REPO_SSH }} /home/debian/docker/evoxia/clipmanager
 
-            docker build -t clipmanager-backend /home/docker/evoxia/clipmanager/backend
-            cd /home/docker
+            docker build -t clipmanager-backend /home/debian/docker/evoxia/clipmanager/backend
+            cd /home/debian/docker
             docker compose up -d --force-recreate clipmanager-backend
-            rm -rf /home/docker/evoxia/clipmanager
+            rm -rf /home/debian/docker/evoxia/clipmanager
 
   deploy-frontend:
     name: Deploy frontend only
@@ -47,10 +47,10 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            rm -rf /home/docker/evoxia/clipmanager
-            git clone --branch frontend-prod ${{ secrets.REPO_SSH }} /home/docker/evoxia/clipmanager
+            rm -rf /home/debian/docker/evoxia/clipmanager
+            git clone --branch frontend-prod ${{ secrets.REPO_SSH }} /home/debian/docker/evoxia/clipmanager
 
-            docker build -t clipmanager-frontend /home/docker/evoxia/clipmanager/frontend
-            cd /home/docker
+            docker build -t clipmanager-frontend /home/debian/docker/evoxia/clipmanager/frontend
+            cd /home/debian/docker
             docker compose up -d --force-recreate clipmanager-frontend
-            rm -rf /home/docker/evoxia/clipmanager
+            rm -rf /home/debian/docker/evoxia/clipmanager
