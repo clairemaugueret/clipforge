@@ -23,12 +23,21 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo rm -rf /home/debian/docker/evoxia/clipmanager || true
-            git clone --depth 1 --branch backend-prod ${{ secrets.REPO_SSH }} /home/debian/docker/evoxia/clipmanager
+            set -e                                
 
-            docker build --no-cache -t clipmanager-backend /home/debian/docker/evoxia/clipmanager/backend
+            sudo mkdir -p /home/debian/docker/evoxia
+            sudo chown -R debian:debian /home/debian/docker/evoxia
+
+            rm -rf /home/debian/docker/evoxia/clipmanager || true
+            git clone --depth 1 --branch backend-prod ${{ secrets.REPO_SSH }} \
+              /home/debian/docker/evoxia/clipmanager
+
+            docker build --no-cache -t clipmanager-backend \
+              /home/debian/docker/evoxia/clipmanager/backend
+
             cd /home/debian/docker
             docker compose up -d --force-recreate clipmanager-backend
+
             sudo rm -rf /home/debian/docker/evoxia/clipmanager || true
 
   deploy-frontend:
@@ -47,10 +56,19 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo rm -rf /home/debian/docker/evoxia/clipmanager || true
-            git clone --depth 1 --branch frontend-prod ${{ secrets.REPO_SSH }} /home/debian/docker/evoxia/clipmanager
+            set -e
 
-            docker build --no-cache -t clipmanager-frontend /home/debian/docker/evoxia/clipmanager/frontend
+            sudo mkdir -p /home/debian/docker/evoxia
+            sudo chown -R debian:debian /home/debian/docker/evoxia
+
+            rm -rf /home/debian/docker/evoxia/clipmanager || true
+            git clone --depth 1 --branch frontend-prod ${{ secrets.REPO_SSH }} \
+              /home/debian/docker/evoxia/clipmanager
+
+            docker build --no-cache -t clipmanager-frontend \
+              /home/debian/docker/evoxia/clipmanager/frontend
+
             cd /home/debian/docker
             docker compose up -d --force-recreate clipmanager-frontend
+
             sudo rm -rf /home/debian/docker/evoxia/clipmanager || true
