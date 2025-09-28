@@ -2,7 +2,9 @@ import { useState } from "react";
 import { formatHumanDate } from "./utils/date";
 import ExpertVoteModale from "./utils/vote";
 import EditClaimModal from "./utils/EditClaimModal";
+import ConfirmDeleteModal from "./utils/ConfirmDeleteModal";
 import default_user from "./images/default_user.png";
+import { useSelector, useDispatch } from "react-redux";
 
 export default function ClipViewer({
   clip,
@@ -10,13 +12,17 @@ export default function ClipViewer({
   expertVotes = {},
   onExpertVote,
   onEditClip,
+  onDeleteClip,
 }) {
   const [commentInput, setCommentInput] = useState("");
   const [showVoteModal, setShowVoteModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [votingExpertPseudo, setVotingExpertPseudo] = useState(null);
 
   const experts = users.filter((u) => u.profil === "expert");
+
+  const user = useSelector((state) => state.user);
 
   const addComment = () => {
     if (!commentInput.trim()) return;
@@ -54,7 +60,7 @@ export default function ClipViewer({
           {clip.subject}
         </h2>
         <p className="text-sm mb-6 text-gray-400">
-          Par {clip.author || "Inconnu"} —{" "}
+          Par {clip.authorId.username || "Inconnu"} —{" "}
           {new Date(clip.createdAt).toLocaleDateString("fr-FR")}
         </p>
 
@@ -77,6 +83,13 @@ export default function ClipViewer({
               className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
             >
               Modifier
+            </button>
+
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="px-3 py-1 ml-4 bg-red-700 text-white rounded hover:bg-red-800 text-sm"
+            >
+              Supprimer
             </button>
           </div>
 
@@ -147,7 +160,7 @@ export default function ClipViewer({
                 >
                   <div>{c.text}</div>
                   <div className="text-gray-500 text-xs">
-                    — {c.user}, {formatHumanDate(c.date)}
+                    — {c.userName}, {formatHumanDate(c.createdAt)}
                   </div>
                 </li>
               ))}
@@ -193,6 +206,16 @@ export default function ClipViewer({
             setVotingExpertPseudo(null);
           }}
           onVote={(vote) => handleVote(votingExpertPseudo, vote)}
+        />
+      )}
+
+      {showDeleteModal && (
+        <ConfirmDeleteModal
+          onConfirm={() => {
+            onDeleteClip?.(clip._id);
+            setShowDeleteModal(false);
+          }}
+          onCancel={() => setShowDeleteModal(false)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 import { formatHumanDate } from "./utils/date";
 import default_user from "./images/default_user.png";
+import { useSelector, useDispatch } from "react-redux";
 
 function ClipList({
   clips,
@@ -9,6 +10,8 @@ function ClipList({
   expertVotes = {},
 }) {
   const experts = users.filter((u) => u.profil === "expert");
+
+  const user = useSelector((state) => state.user);
 
   const borderColor = (vote) => {
     return vote === "oui"
@@ -24,10 +27,10 @@ function ClipList({
     <ul className="divide-y">
       {clips.map((clip) => (
         <div
-          key={clip._id}
-          onClick={() => onSelect(clip._id)} // 👈 corriger ici
+          key={clip.clip_id}
+          onClick={() => onSelect(clip.clip_id)}
           className={`px-4 py-3 cursor-pointer hover:bg-gray-600 ${
-            selectedClipId === clip._id ? "bg-gray-600" : ""
+            selectedClipId === clip.clip_id ? "bg-gray-600" : ""
           }`}
         >
           <div className="flex justify-between items-start">
@@ -42,7 +45,7 @@ function ClipList({
                 )}
               </h3>
               <p className="text-xs text-gray-400">
-                par {clip.author || "Inconnu"}
+                par {clip.authorId.username || "Inconnu"}
               </p>
             </div>
 
