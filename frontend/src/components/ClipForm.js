@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
 
 function ClipForm({
   allTags,
@@ -14,6 +15,7 @@ function ClipForm({
   const [tags, setTags] = useState(initialData?.tags || []);
   const [editable, setEditable] = useState(initialData?.editable || false);
   const [newTag, setNewTag] = useState("");
+  const user = useSelector((state) => state.user);
 
   const emitChange = () => {
     if (onChange) {
@@ -51,15 +53,48 @@ function ClipForm({
     setNewTag("");
   };
 
+  function extractClipId(link) {
+    try {
+      const url = new URL(link);
+      const host = url.hostname;
+
+      // 1) URL directe de clips.twitch.tv
+      //    ex. https://clips.twitch.tv/MonClipUnique
+      if (host === "clips.twitch.tv") {
+        // url.pathname === "/MonClipUnique"
+        return url.pathname.slice(1);
+      }
+
+      // 2) URL “in situ” sur twitch.tv
+      //    ex. https://www.twitch.tv/Chaîne/clip/MonClipUnique
+      if (host.includes("twitch.tv") && url.pathname.includes("/clip/")) {
+        // on découpe après "/clip/"
+        // et on retire tout ce qui pourrait suivre (query, slash, etc.)
+        return url.pathname.split("/clip/")[1].split("/")[0];
+      }
+
+      // 3) Cas paramètre ?clip=ID
+      if (url.searchParams.has("clip")) {
+        return url.searchParams.get("clip");
+      }
+
+      return null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit({
       ...initialData,
+      clip_id: extractClipId(link),
       subject: title,
       link,
       tags,
       editable,
       draft: false,
+      authorId: { username: user.username },
     });
   };
 

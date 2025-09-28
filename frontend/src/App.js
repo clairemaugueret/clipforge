@@ -38,160 +38,13 @@ const Users = [
   },
 ];
 
-const initialClips = [
-  {
-    _id: 1,
-    subject: "Ace au sniper",
-    tags: ["valorant", "fun"],
-    editable: true,
-    author: "Boubou",
-    createdAt: new Date("2025-07-02T17:57:28"),
-    link: "https://www.twitch.tv/evoxia/clip/CreativeManlySlothDansGame-0Lo1bVZVA142TCTj",
-    image: "",
-    comments: [
-      {
-        user: "Claire",
-        text: "C'est bien mais il manque un truc.",
-        date: new Date("2025-07-03T22:17:13"),
-      },
-      {
-        user: "TrasTop",
-        text: "J'avoue t'aurais pu faire un effort...",
-        date: new Date("2025-07-04T00:03:42"),
-      },
-    ],
-    draft: false,
-  },
-  {
-    _id: 2,
-    subject: "Chat rigolo",
-    tags: ["chat", "fun"],
-    editable: false,
-    author: "Claire",
-    createdAt: new Date("2025-07-01T12:36:25"),
-    link: "https://www.twitch.tv/evoxia/clip/KathishInnocentBorkChocolateRain-4xjxykiJVieiAvVd",
-    image:
-      "https://static-cdn.jtvnw.net/twitch-clips-thumbnails-prod/TolerantTransparentMuleJonCarnage-iYzVhoNG4hzOLzKu/5c56d6ce-498c-4627-b3fb-14d0830762a2/preview.jpg",
-    comments: [
-      {
-        user: "Boubou",
-        text: "C'est cool !",
-        date: new Date("2025-07-01T13:25:25"),
-      },
-    ],
-    draft: false,
-  },
-  {
-    _id: 3,
-    subject: "Clutch 1v3",
-    tags: ["valorant"],
-    editable: true,
-    author: "TrasTop",
-    createdAt: new Date("2025-06-30T11:35:18"),
-    link: "https://www.twitch.tv/evoxia/clip/HardNeighborlyPineappleMVGame-COIRcfSMOMCl8onZ",
-    image:
-      "https://static-cdn.jtvnw.net/twitch-clips-thumbnails-prod/PlumpCogentLaptopKippa-nMH3oLLKb-gi6_DS/55b174e3-64e6-4edd-945f-553654782b48/preview.jpg",
-    comments: [
-      {
-        user: "Boubou",
-        text: "C'est nul",
-        date: new Date("2025-07-01T13:25:25"),
-      },
-    ],
-    draft: false,
-  },
-  {
-    _id: 4,
-    subject: "ct cho",
-    tags: ["valorant", "fun"],
-    author: "Sacha",
-    createdAt: "2025-07-01T09:00:00Z",
-    link: "https://www.twitch.tv/evoxia/clip/VainAntsyMoosePRChase-LwmEmZW7JzcYvAsR",
-    image:
-      "https://static-cdn.jtvnw.net/twitch-clips-thumbnails-prod/ConfidentEphemeralChickenEagleEye-ZTKRgxgiosFYmydH/a8c1c3d3-6c07-45b8-ad7e-b3bc496e3809/preview.jpg",
-    comments: [
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: formatHumanDate("2025-07-03T10:15:00Z"),
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: formatHumanDate("2025-07-03T11:02:00Z"),
-      },
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: "2025-07-03T10:15:00Z",
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: "2025-07-03T11:02:00Z",
-      },
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: "2025-07-03T10:15:00Z",
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: "2025-07-03T11:02:00Z",
-      },
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: "2025-07-03T10:15:00Z",
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: "2025-07-03T11:02:00Z",
-      },
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: "2025-07-03T10:15:00Z",
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: "2025-07-03T11:02:00Z",
-      },
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: "2025-07-03T10:15:00Z",
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: "2025-07-03T11:02:00Z",
-      },
-      {
-        user: "Alex",
-        text: "Magnifique clutch 🔥",
-        date: "2025-07-03T10:15:00Z",
-      },
-      {
-        user: "Nina",
-        text: "On voit bien la tension à la fin, gg !",
-        date: "2025-07-03T11:02:00Z",
-      },
-    ],
-    draft: false,
-  },
-];
-
 function App() {
   //CLAIRE
   const user = useSelector((state) => state.user);
   const dispatch = useDispatch();
   //CLAIRE
 
-  const [clips, setClips] = useState(initialClips);
+  const [clips, setClips] = useState([]);
   const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -200,7 +53,7 @@ function App() {
   const [allTags, setAllTags] = useState(["valorant", "fun", "chat"]);
   const [draftClip, setDraftClip] = useState(null);
 
-  const selectedClip = clips.find((c) => c._id === selectedClipId);
+  const selectedClip = clips.find((c) => c.clip_id === selectedClipId);
 
   const toggleTag = (tag) => {
     setSelectedTags((prev) =>
@@ -222,23 +75,31 @@ function App() {
 
   const handleProposeClick = () => {
     const newDraft = {
-      _id: "draft",
+      clip_id: "draft",
       subject: "Nouveau clip",
       tags: [],
       editable: false,
       draft: true,
-      author: "Moi",
+      authorId: { username: user.username },
       createdAt: new Date(),
     };
 
     setDraftClip(newDraft);
     setClips((prev) => {
-      const withoutOldDraft = prev.filter((clip) => clip._id !== "draft");
+      const withoutOldDraft = prev.filter((clip) => clip.clip_id !== "draft");
       return [newDraft, ...withoutOldDraft];
     });
 
     setSelectedClipId("draft");
     setShowForm(true);
+  };
+
+  const handleDeleteClip = (clipId) => {
+    setClips((prev) => prev.filter((clip) => clip.clip_id !== clipId));
+
+    if (selectedClipId === clipId) {
+      setSelectedClipId(null);
+    }
   };
 
   const handleCancelForm = () => {
@@ -248,7 +109,7 @@ function App() {
       );
       if (!confirmDelete) return;
 
-      setClips((prev) => prev.filter((clip) => clip._id !== "draft"));
+      setClips((prev) => prev.filter((clip) => clip.clip_id !== "draft"));
       setDraftClip(null);
     }
 
@@ -260,7 +121,7 @@ function App() {
     const updated = { ...updatedClip, draft: true };
 
     setClips((prev) =>
-      prev.map((clip) => (clip._id === "draft" ? updated : clip))
+      prev.map((clip) => (clip.clip_id === "draft" ? updated : clip))
     );
 
     setDraftClip(updated);
@@ -268,39 +129,70 @@ function App() {
   };
 
   const handleSelectClip = (clipId) => {
-    const freshClip = clips.find((c) => c._id === clipId);
+    const freshClip = clips.find((c) => c.clip_id === clipId);
     console.log(selectedClip);
     setSelectedClipId(clipId);
-    setShowForm(freshClip?._id === "draft");
+    setShowForm(freshClip?.clip_id === "draft");
   };
 
   const handleEditClip = () => {
     if (!selectedClipId) return;
 
-    const clipToEdit = clips.find((c) => c._id === selectedClipId);
+    const clipToEdit = clips.find((c) => c.clip_id === selectedClipId);
     if (!clipToEdit) return;
 
     const draftClip = {
       ...clipToEdit,
       draft: true,
-      _id: "draft",
+      clip_id: "draft",
     };
 
-    setClips((prev) => [...prev.filter((c) => c._id !== "draft"), draftClip]);
+    setClips((prev) => [
+      ...prev.filter((c) => c.clip_id !== "draft"),
+      draftClip,
+    ]);
 
     setSelectedClipId("draft");
     setShowForm(true);
   };
 
   const addNewClip = (clip) => {
-    const publishedClip = { ...clip, draft: false };
+    // const publishedClip = { ...clip, draft: false };
 
-    setClips((prev) =>
-      prev.map((c) => (c._id === "draft" ? publishedClip : c))
-    );
+    // setClips((prev) =>
+    //   prev.map((c) => (c.clip_id === "draft" ? publishedClip : c))
+    // );
+
+    fetch("http://localhost:3001/clipmanager/clips/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: user.token,
+        link: clip.link,
+        subject: clip.subject,
+        tags: clip.tags,
+        editable: clip.editable,
+        text: clip.comment,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.result) {
+          setClips((prev) => [
+            ...prev.filter((c) => c.clip_id !== "draft"),
+            clip,
+          ]);
+          // setClips((prev) => prev.filter((c) => c.clip_id !== "draft"));
+          setSelectedClipId(data.clip.clip_id);
+        } else {
+          console.error(data.error);
+        }
+      })
+      .catch((err) => console.error("Erreur backend :", err));
+    console.log(clips);
 
     setShowForm(false);
-    setSelectedClipId(publishedClip._id);
+    // setSelectedClipId(publishedClip.clip_id);
     setDraftClip(null);
   };
 
@@ -310,12 +202,11 @@ function App() {
     }
   };
 
-  const filteredClips =
-    selectedTags.length === 0
-      ? clips
-      : clips.filter((clip) =>
-          (clip.tags || []).some((tag) => selectedTags.includes(tag))
-        );
+  const filteredClips = clips.filter(
+    (clip) =>
+      selectedTags.length === 0 ||
+      selectedTags.every((tag) => clip.tags.includes(tag))
+  );
 
   //CLAIRE
   //Gestion de la déconnexion
@@ -357,23 +248,36 @@ function App() {
   }, [dispatch]);
   //CLAIRE
 
+  useEffect(() => {
+    const fetchClips = async () => {
+      try {
+        const response = await fetch(
+          "http://localhost:3001/clipmanager/clips/all"
+        );
+        if (!response.ok) {
+          throw new Error("Erreur réseau");
+        }
+        const data = await response.json();
+        setClips(data.clips);
+      } catch (error) {
+        console.error("Erreur lors du chargement des clips :", error);
+      }
+    };
+
+    fetchClips();
+  }, []);
+
   return (
     <div className="h-screen flex flex-col">
       <header className="bg-indigo-950 text-white p-4 shadow-md flex justify-between items-center">
         <h1 className="text-xl font-bold">Mes Clips</h1>
-        {/* CLAIRE */}
-        <button
-          onClick={() =>
-            user.username ? userLogout() : setShowLoginModal(true)
-          }
-        >
+        <button onClick={() => setShowLoginModal(true)}>
           <img
-            src={user.avatar_url || default_user}
-            alt={user.username || "Se connecter"}
+            src={user?.avatar_url || default_user}
+            alt={user?.username || "Se connecter"}
             className="w-8 h-8 rounded-full border border-white hover:ring-2 ring-indigo-400"
           />
         </button>
-        {/* CLAIRE */}
       </header>
 
       <div className="flex flex-1 h-0">
@@ -428,6 +332,7 @@ function App() {
                   handleExpertVote(selectedClipId, pseudo, vote)
                 }
                 onEditClip={handleEditClip}
+                onDeleteClip={handleDeleteClip}
               />
             )
           )}
@@ -470,7 +375,11 @@ function App() {
         />
       )}
       {showLoginModal && (
-        <LoginModal onClose={() => setShowLoginModal(false)} />
+        <LoginModal
+          user={user.username}
+          onClose={() => setShowLoginModal(false)}
+          onLogout={userLogout}
+        />
       )}
     </div>
   );
