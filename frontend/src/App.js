@@ -9,34 +9,7 @@ import default_user from "./components/images/default_user.png";
 import { useSelector, useDispatch } from "react-redux";
 import { login, logout } from "./reducers/userSlice";
 
-// Tableau statique des utilisateurs - utilisé pour afficher les experts et leurs votes
-// TODO: À terme, ces données devraient venir du backend
-const Users = [
-  {
-    userId: 1,
-    pseudo: "Boubou",
-    profil: "expert",
-    userImage: "https://i.pravatar.cc/40?u=user1",
-  },
-  {
-    userId: 2,
-    pseudo: "Claire",
-    profil: "expert",
-    userImage: "https://i.pravatar.cc/40?u=user2",
-  },
-  {
-    userId: 3,
-    pseudo: "TrasTop",
-    profil: "expert",
-    userImage: "",
-  },
-  {
-    userId: 4,
-    pseudo: "Heaven",
-    profil: "random",
-    userImage: "https://i.pravatar.cc/40?u=user1",
-  },
-];
+const BACK_URL = "http://localhost:3001";
 
 function App() {
   // ============================================
@@ -82,6 +55,9 @@ function App() {
   // Objet stockant les votes des experts par clip
   // Structure: { clipId: { pseudo: "oui"/"non"/"à revoir" } }
   const [expertVotes, setExpertVotes] = useState({});
+
+  // Protection contre les requêtes d'authentification multiples
+  const [isAuthInProgress, setIsAuthInProgress] = useState(false);
 
   // ============================================
   // VARIABLES DÉRIVÉES
@@ -231,7 +207,6 @@ function App() {
    */
   const handleSelectClip = (clipId) => {
     const freshClip = clips.find((c) => c.clip_id === clipId);
-    console.log(selectedClip);
     setSelectedClipId(clipId);
     // Affiche le formulaire uniquement si c'est un brouillon
     setShowForm(freshClip?.clip_id === "draft");
@@ -278,7 +253,7 @@ function App() {
    */
   const addNewClip = (clip) => {
     // Envoie une requête POST au backend pour créer le clip
-    fetch("http://localhost:3001/clipmanager/clips/new", {
+    fetch(`${BACK_URL}/clipmanager/clips/new`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -305,8 +280,6 @@ function App() {
         }
       })
       .catch((err) => console.error("Erreur backend :", err));
-
-    console.log(clips);
 
     setShowForm(false);
     setDraftClip(null);
@@ -349,14 +322,24 @@ function App() {
    * Gère le retour de l'authentification Twitch
    * Récupère le code dans l'URL et l'envoie au backend pour obtenir les infos utilisateur
    * S'exécute au montage du composant
+   *
+   * Flux OAuth 2.0 complet :
+   * 1. User clique sur "Se connecter" dans LoginModal
+   * 2. Redirection vers Twitch pour autorisation
+   * 3. Twitch redirige vers notre app avec un code dans l'URL
+   * 4. Ce useEffect détecte le code et l'échange contre un token via le backend
+   * 5. Les données utilisateur sont stockées dans Redux
+   * 6. L'URL est nettoyée pour enlever le code
    */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
 
-    // Si un code d'autorisation Twitch est présent dans l'URL
-    if (code) {
-      fetch("http://localhost:3001/clipmanager/users/authtwitch", {
+    // Si un code d'autorisation Twitch est présent dans l'URL ET qu'aucune auth n'est en cours
+    if (code && !isAuthInProgress) {
+      setIsAuthInProgress(true); // Bloque d'autres tentatives simultanées
+
+      fetch(`${BACK_URL}/clipmanager/users/authtwitch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
@@ -378,9 +361,12 @@ function App() {
             console.error(data.error);
           }
         })
-        .catch((err) => console.error("Erreur backend :", err));
+        .catch((err) => console.error("Erreur backend :", err))
+        .finally(() => {
+          setIsAuthInProgress(false); // Débloque pour une prochaine tentative
+        });
     }
-  }, [dispatch]);
+  }, [dispatch, isAuthInProgress]);
 
   // ============================================
   // EFFET : CHARGEMENT DE LA LISTE DES USERS DE LA BASE DE DONNÉES
@@ -392,9 +378,7 @@ function App() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetch(
-          "http://localhost:3001/clipmanager/users/all"
-        );
+        const response = await fetch(`${BACK_URL}/clipmanager/users/all`);
         if (!response.ok) {
           throw new Error("Erreur réseau");
         }
@@ -418,9 +402,7 @@ function App() {
   useEffect(() => {
     const fetchClips = async () => {
       try {
-        const response = await fetch(
-          "http://localhost:3001/clipmanager/clips/all"
-        );
+        const response = await fetch(`${BACK_URL}/clipmanager/clips/all`);
         if (!response.ok) {
           throw new Error("Erreur réseau");
         }
@@ -443,16 +425,31 @@ function App() {
       {/* ============================================
           HEADER : Titre et bouton de connexion
           ============================================ */}
-      <header className="bg-indigo-950 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 className="text-xl font-bold">Mes Clips</h1>
+      <header className="bg-indigo-950 p-4 shadow-md flex justify-between items-center">
+        <h1 className="text-xl font-bold text-white">
+          Clips Manager{" "}
+          <span className="text-base text-indigo-400">
+            • TikTok @evoxia.clips
+          </span>
+        </h1>
         {/* Avatar cliquable pour ouvrir la modale de connexion/déconnexion */}
-        <button onClick={() => setShowLoginModal(true)}>
-          <img
-            src={user?.avatar_url || default_user}
-            alt={user?.username || "Se connecter"}
-            className="w-8 h-8 rounded-full border border-white hover:ring-2 ring-indigo-400"
-          />
-        </button>
+
+        <div className="flex justify-between items-center">
+          {user.username ? (
+            <></>
+          ) : (
+            <span className="font-bold text-sm text-indigo-800 pr-4 italic">
+              En attente de connexion...
+            </span>
+          )}
+          <button onClick={() => setShowLoginModal(true)}>
+            <img
+              src={user?.avatar_url || default_user}
+              alt={user?.username || "Se connecter"}
+              className="w-8 h-8 rounded-full border border-white hover:ring-2 ring-indigo-400"
+            />
+          </button>
+        </div>
       </header>
 
       {/* ============================================
@@ -463,37 +460,43 @@ function App() {
             COLONNE GAUCHE : Liste des clips + bouton proposer
             ============================================ */}
         <aside className="w-1/4 max-w-sm bg-gray-700 border-r border-gray-300 flex flex-col">
-          {/* En-tête de la liste avec bouton filtrer */}
-          <div className="p-4 border-b font-bold text-lg flex text-gray-50 justify-between items-center">
-            <span>Liste des clips</span>
-            <button
-              onClick={() => setShowFilterModal(true)}
-              className="text-sm text-indigo-400 hover:text-indigo-500"
-            >
-              Filtrer
-            </button>
-          </div>
+          {!user.username ? (
+            <div></div>
+          ) : (
+            <>
+              {/* En-tête de la liste avec bouton filtrer */}
+              <div className="p-4 border-b font-bold text-lg flex text-gray-50 justify-between items-center">
+                <span>Liste des clips</span>
+                <button
+                  onClick={() => setShowFilterModal(true)}
+                  className="text-sm text-indigo-400 hover:text-indigo-500"
+                >
+                  Filtrer
+                </button>
+              </div>
 
-          {/* Liste scrollable des clips filtrés */}
-          <div className="flex-1 overflow-y-auto">
-            <ClipList
-              clips={filteredClips}
-              onSelect={handleSelectClip}
-              selectedClipId={selectedClipId}
-              users={users}
-              expertVotes={expertVotes}
-            />
-          </div>
+              {/* Liste scrollable des clips filtrés */}
+              <div className="flex-1 overflow-y-auto">
+                <ClipList
+                  clips={filteredClips}
+                  onSelect={handleSelectClip}
+                  selectedClipId={selectedClipId}
+                  users={users}
+                  expertVotes={expertVotes}
+                />
+              </div>
 
-          {/* Bouton "Proposer un clip" fixé en bas */}
-          <div className="p-4 border-t">
-            <button
-              onClick={handleProposeClick}
-              className="w-full px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
-            >
-              Proposer un clip
-            </button>
-          </div>
+              {/* Bouton "Proposer un clip" fixé en bas */}
+              <div className="p-4 border-t">
+                <button
+                  onClick={handleProposeClick}
+                  className="w-full px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
+                >
+                  Proposer un clip
+                </button>
+              </div>
+            </>
+          )}
         </aside>
 
         {/* ============================================
@@ -579,6 +582,7 @@ function App() {
           user={user.username}
           onClose={() => setShowLoginModal(false)}
           onLogout={userLogout}
+          isAuthInProgress={isAuthInProgress}
         />
       )}
     </div>
