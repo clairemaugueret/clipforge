@@ -4,8 +4,22 @@ const User = require("../models/User");
 // Utilisé pour protéger les routes nécessitant une authentification
 const checkAuth = async (req, res, next) => {
   try {
-    const token =
-      req.body.token || req.headers["authorization"] || req.query.token || null;
+    // Récupération du token depuis différentes sources
+    // Gestion sécurisée pour éviter les erreurs si req.body est undefined
+    let token = null;
+
+    // 1. Vérifier dans les headers (priorité pour les requêtes GET)
+    if (req.headers["authorization"]) {
+      token = req.headers["authorization"];
+    }
+    // 2. Vérifier dans le body (pour POST/PUT)
+    else if (req.body && req.body.token) {
+      token = req.body.token;
+    }
+    // 3. Vérifier dans les query params
+    else if (req.query && req.query.token) {
+      token = req.query.token;
+    }
 
     if (!token) {
       return res.status(401).json({ result: false, error: "Token missing" });
@@ -18,7 +32,7 @@ const checkAuth = async (req, res, next) => {
       return res.status(403).json({ result: false, error: "Invalid token" });
     }
 
-    // Vérification whitelist (exemple : champ `whitelist: true` dans le modèle User)
+    // Vérification whitelist
     if (!user.whitelist) {
       return res
         .status(403)

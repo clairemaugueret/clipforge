@@ -81,6 +81,22 @@ function ClipList({
               <p className="text-xs text-gray-400">
                 par {clip.authorId.username || "Inconnu"}
               </p>
+
+              <div className="flex justify-between items-center">
+                {/* Status - toujours affiché */}
+                {clip.status && (
+                  <p className="text-xs text-gray-500 italic mt-1">
+                    Statut: {clip.status}
+                  </p>
+                )}
+
+                {/* Edition - affiché si editable = true OU s'il y a edit_progress */}
+                {(clip.editable || clip.edit_progress) && (
+                  <p className="text-xs text-gray-500 italic">
+                    Édition: {clip.edit_progress || "EDITABLE"}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* ============================================

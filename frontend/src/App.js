@@ -9,7 +9,7 @@ import default_user from "./components/images/default_user.png";
 import { useSelector, useDispatch } from "react-redux";
 import { login, logout } from "./reducers/userSlice";
 
-const BACK_URL = "http://localhost:3001";
+const BACK_URL = process.env.REACT_APP_BACK_URL;
 
 function App() {
   // ============================================
@@ -213,7 +213,7 @@ function App() {
   };
 
   // ============================================
-  // ÉDITION D'UN CLIP EXISTANT
+  // MODIFICATION DES INFOS D'UN CLIP EXISTANT
   // ============================================
 
   /**
@@ -251,38 +251,48 @@ function App() {
    * Envoie le clip au backend pour le sauvegarder
    * Transforme le brouillon en clip publié
    */
-  const addNewClip = (clip) => {
-    // Envoie une requête POST au backend pour créer le clip
-    fetch(`${BACK_URL}/clipmanager/clips/new`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: user.token,
-        link: clip.link,
-        subject: clip.subject,
-        tags: clip.tags,
-        editable: clip.editable,
-        text: clip.comment,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.result) {
-          // Si succès, retire le brouillon et ajoute le clip publié
-          setClips((prev) => [
-            ...prev.filter((c) => c.clip_id !== "draft"),
-            clip,
-          ]);
-          // Sélectionne le nouveau clip créé
-          setSelectedClipId(data.clip.clip_id);
-        } else {
-          console.error(data.error);
-        }
-      })
-      .catch((err) => console.error("Erreur backend :", err));
+  const addNewClip = async (clip) => {
+    try {
+      // 1. Créer le clip
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: user.token,
+          link: clip.link,
+          subject: clip.subject,
+          tags: clip.tags,
+          editable: clip.editable,
+          text: clip.comment,
+        }),
+      });
 
-    setShowForm(false);
-    setDraftClip(null);
+      const data = await response.json();
+
+      if (data.result) {
+        // 2. Re-fetch TOUTE la liste des clips depuis la DB
+        const clipsResponse = await fetch(`${BACK_URL}/clipmanager/clips/all`);
+        const clipsData = await clipsResponse.json();
+
+        if (clipsData.result) {
+          // 3. Mettre à jour l'état avec la liste fraîche
+          setClips(clipsData.clips);
+
+          // 4. Sélectionner le nouveau clip créé
+          setSelectedClipId(data.clip.clip_id);
+
+          // 5. Nettoyer le formulaire
+          setShowForm(false);
+          setDraftClip(null);
+        }
+      } else {
+        console.error("Erreur:", data.error);
+        alert(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Erreur backend :", err);
+      alert("Erreur lors de la création du clip");
+    }
   };
 
   // ============================================
@@ -312,6 +322,22 @@ function App() {
       dispatch(logout());
       alert("✅ Déconnexion réussie !");
     }
+  };
+
+  // ============================================
+  // GESTION DE L'EDITION D'UN CLIP À EDITER
+  // ============================================
+
+  /**
+   * Met à jour un clip dans la liste après modification
+   * Utilisé notamment après la prise en charge de l'édition
+   */
+  const handleClipUpdate = (updatedClip) => {
+    setClips((prevClips) =>
+      prevClips.map((clip) =>
+        clip.clip_id === updatedClip.clip_id ? updatedClip : clip
+      )
+    );
   };
 
   // ============================================
@@ -503,29 +529,37 @@ function App() {
             COLONNE CENTRALE : Formulaire ou Viewer
             ============================================ */}
         <main className="flex-1 bg-gray-800 h-full p-6">
-          {/* Affiche le formulaire si showForm est true, sinon le viewer */}
-          {showForm && selectedClip ? (
-            <ClipForm
-              allTags={allTags}
-              onSubmit={addNewClip}
-              onAddTag={addNewTag}
-              onCancel={handleCancelForm}
-              onChange={handleDraftUpdate}
-              initialData={selectedClip}
-            />
+          {!user.username ? (
+            <div></div>
           ) : (
-            selectedClip && (
-              <ClipViewer
-                clip={selectedClip}
-                users={users}
-                expertVotes={expertVotes[selectedClipId] || {}}
-                onExpertVote={(pseudo, vote) =>
-                  handleExpertVote(selectedClipId, pseudo, vote)
-                }
-                onEditClip={handleEditClip}
-                onDeleteClip={handleDeleteClip}
-              />
-            )
+            <>
+              {/* Affiche le formulaire si showForm est true, sinon le viewer */}
+              {showForm && selectedClip ? (
+                <ClipForm
+                  allTags={allTags}
+                  onSubmit={addNewClip}
+                  onAddTag={addNewTag}
+                  onCancel={handleCancelForm}
+                  onChange={handleDraftUpdate}
+                  initialData={selectedClip}
+                />
+              ) : (
+                selectedClip && (
+                  <ClipViewer
+                    clip={selectedClip}
+                    users={users}
+                    user={user}
+                    expertVotes={expertVotes[selectedClipId] || {}}
+                    onExpertVote={(pseudo, vote) =>
+                      handleExpertVote(selectedClipId, pseudo, vote)
+                    }
+                    onEditClip={handleEditClip}
+                    onDeleteClip={handleDeleteClip}
+                    onClipUpdate={handleClipUpdate}
+                  />
+                )
+              )}
+            </>
           )}
         </main>
 
@@ -533,29 +567,35 @@ function App() {
             COLONNE DROITE : Image et lien Twitch du clip
             ============================================ */}
         <div className="w-[700px] bg-gray-800 p-4 flex flex-col items-end gap-4">
-          {selectedClip && (
+          {!user.username ? (
+            <div></div>
+          ) : (
             <>
-              {/* Image d'illustration du clip (ou bannière par défaut) */}
-              <img
-                src={
-                  selectedClip.image?.trim()
-                    ? selectedClip.image
-                    : "https://static-cdn.jtvnw.net/jtv_user_pictures/f9e5fd9c-4210-4ccf-bb5c-4c84f14d7876-profile_banner-480.png"
-                }
-                alt="Illustration du clip"
-                className="w-full rounded shadow object-cover"
-              />
+              {selectedClip && (
+                <>
+                  {/* Image d'illustration du clip (ou bannière par défaut) */}
+                  <img
+                    src={
+                      selectedClip.image?.trim()
+                        ? selectedClip.image
+                        : "offline-screen_socials.png"
+                    }
+                    alt="Illustration du clip"
+                    className="w-full rounded shadow object-cover"
+                  />
 
-              {/* Bouton pour ouvrir le clip sur Twitch */}
-              {selectedClip.link && (
-                <a
-                  href={selectedClip.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-center w-32"
-                >
-                  Voir sur Twitch
-                </a>
+                  {/* Bouton pour ouvrir le clip sur Twitch */}
+                  {selectedClip.link && (
+                    <a
+                      href={selectedClip.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-center w-32"
+                    >
+                      Voir sur Twitch
+                    </a>
+                  )}
+                </>
               )}
             </>
           )}

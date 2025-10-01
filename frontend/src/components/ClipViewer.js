@@ -4,6 +4,7 @@ import ExpertVoteModale from "./utils/vote";
 import EditClaimModal from "./utils/EditClaimModal";
 import ConfirmDeleteModal from "./utils/ConfirmDeleteModal";
 import default_user from "./images/default_user.png";
+import { useSelector } from "react-redux";
 
 /**
  * Composant principal d'affichage détaillé d'un clip
@@ -12,19 +13,25 @@ import default_user from "./images/default_user.png";
  *
  * @param {Object} clip - Le clip à afficher avec toutes ses données
  * @param {Array} users - Liste complète des utilisateurs
+ * @param {Object} user - Utilisateur connecté avec token
  * @param {Object} expertVotes - Votes des experts pour ce clip { username: "oui"/"non"/"à revoir" }
  * @param {Function} onExpertVote - Callback pour enregistrer un vote
  * @param {Function} onEditClip - Callback pour passer en mode édition
  * @param {Function} onDeleteClip - Callback pour supprimer le clip
+ * @param {Function} onClipUpdate - Callback pour pour mettre à jour le clip dans App.js
  */
+
 export default function ClipViewer({
   clip,
   users = [],
+  user,
   expertVotes = {},
   onExpertVote,
   onEditClip,
   onDeleteClip,
+  onClipUpdate,
 }) {
+  const BACK_URL = process.env.REACT_APP_BACK_URL;
   // ============================================
   // ÉTATS LOCAUX DU COMPOSANT
   // ============================================
@@ -63,21 +70,37 @@ export default function ClipViewer({
 
   /**
    * Ajoute un nouveau commentaire au clip
-   * TODO: Actuellement ne fait que créer l'objet localement, il faut l'envoyer au backend
    */
-  const addComment = () => {
-    if (!commentInput.trim()) return; // Ne rien faire si le commentaire est vide
+  const addComment = async () => {
+    if (!commentInput.trim()) return;
 
-    const newComment = {
-      user: "Moi",
-      text: commentInput.trim(),
-      date: new Date(),
-    };
+    try {
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/addcomment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: user?.token,
+          clipId: clip.clip_id,
+          text: commentInput.trim(),
+        }),
+      });
 
-    // TODO: Envoyer au backend via une requête POST
-    // fetch(...).then(...)
+      const data = await response.json();
 
-    setCommentInput(""); // Vide le champ de saisie
+      if (data.result) {
+        // Mise à jour réussie
+        onClipUpdate?.(data.clip);
+        setCommentInput("");
+      } else {
+        console.error("Erreur lors de l'ajout du commentaire:", data.error);
+        alert("Erreur lors de l'ajout du commentaire");
+      }
+    } catch (error) {
+      console.error("Erreur réseau:", error);
+      alert("Erreur de connexion au serveur");
+    }
   };
 
   // ============================================
@@ -114,6 +137,66 @@ export default function ClipViewer({
         : vote === "à revoir"
           ? "ring-4 ring-amber-400" // À revoir = ambre
           : "ring-transparent"; // Pas encore voté = transparent
+  };
+
+  // ============================================
+  // GESTION DE L'EDITION D'UN CLIP À EDITER
+  // ============================================
+  const handleEditStart = async () => {
+    try {
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/editstart`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: user.token,
+          clipId: clip.clip_id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        // Mettre à jour le clip dans App.js
+        if (onClipUpdate) {
+          onClipUpdate(data.clip);
+        }
+        setShowEditModal(false);
+      } else {
+        console.error("Erreur lors de la prise en charge:", data.error);
+        alert(`Erreur: ${data.error}`);
+      }
+    } catch (error) {
+      console.error("Erreur réseau:", error);
+      alert("Erreur lors de la communication avec le serveur");
+    }
+  };
+
+  const handleEditEnd = async () => {
+    try {
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/editend`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: user.token,
+          clipId: clip.clip_id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        // Mettre à jour le clip dans App.js
+        if (onClipUpdate) {
+          onClipUpdate(data.clip);
+        }
+      } else {
+        console.error("Erreur lors de la fin d'édition:", data.error);
+        alert(`Erreur: ${data.error}`);
+      }
+    } catch (error) {
+      console.error("Erreur réseau:", error);
+      alert("Erreur lors de la communication avec le serveur");
+    }
   };
 
   // ============================================
@@ -172,24 +255,46 @@ export default function ClipViewer({
 
           {/* COLONNE 2 : Indicateur "À éditer" (si applicable) */}
           <div className="flex justify-left">
-            {clip.editable && (
+            {clip.editable && !clip.edit_progress && (
               <button
                 onClick={() => setShowEditModal(true)}
-                className="text-m px-3 bg-amber-600 rounded hover:bg-amber-700 font-medium"
+                className="text-sm px-3 py-1 bg-amber-600 rounded hover:bg-amber-700 font-medium"
+                title="Clique pour prendre en charge l'édition de ce clip"
               >
                 À éditer
               </button>
+            )}
+
+            {clip.edit_progress === "IN_PROGRESS" && clip.editorId && (
+              <button
+                onClick={handleEditEnd}
+                disabled={user.username !== clip.editorId.username}
+                className={`text-sm px-3 py-1 rounded font-medium ${
+                  user.username === clip.editorId.username
+                    ? "bg-yellow-600 hover:bg-yellow-700 cursor-pointer "
+                    : "bg-yellow-600 cursor-not-allowed opacity-75"
+                }`}
+                title={
+                  user.username === clip.editorId.username
+                    ? "Clique pour terminer l'édition"
+                    : "Seul l'éditeur peut terminer l'édition"
+                }
+              >
+                <span>En cours d'édition par {clip.editorId.username}</span>
+              </button>
+            )}
+
+            {clip.edit_progress === "TERMINATED" && clip.editorId && (
+              <div className="text-sm px-3 py-1 bg-green-600 rounded font-medium flex items-center gap-2">
+                <span>Édition terminée par {clip.editorId.username}</span>
+              </div>
             )}
 
             {/* Modale de confirmation pour prendre en charge l'édition */}
             {showEditModal && (
               <EditClaimModal
                 onCancel={() => setShowEditModal(false)}
-                onConfirm={() => {
-                  setShowEditModal(false);
-                  // TODO: logique à ajouter ici : prise en charge de l'édition
-                  // Pourrait mettre à jour le clip pour assigner un éditeur
-                }}
+                onConfirm={handleEditStart}
               />
             )}
           </div>

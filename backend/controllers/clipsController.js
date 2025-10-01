@@ -13,10 +13,28 @@ const { isAuthorOr403, isExpertOr403 } = require("../utils/usersUtils");
 const { sanitizeCommentText } = require("../utils/commentsUtils");
 const { Op } = require("sequelize");
 
-// CONTROLLER - Récupérer les infos d’un clip via l’API Twitch
+// CONTROLLER - Récupérer les infos d'un clip via l'API Twitch
 async function getClipInfo(req, res) {
-  const clipId = extractClipId(req.body.link);
-  const appToken = req.body.token;
+  // Le token est déjà vérifié par le middleware checkAuth
+  // On récupère le lien depuis les query parameters
+  const { link } = req.query;
+
+  if (!link) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Missing link parameter" });
+  }
+
+  const clipId = extractClipId(link);
+
+  if (!clipId) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Invalid Twitch clip URL" });
+  }
+
+  // Le token de l'app est stocké dans req.token par le middleware checkAuth
+  const appToken = req.token;
 
   const result = await fetchTwitchClipData(clipId, appToken);
 

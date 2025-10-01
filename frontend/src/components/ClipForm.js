@@ -1,16 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
+
+const BACK_URL = process.env.REACT_APP_BACK_URL;
 
 /**
  * Composant formulaire pour créer ou éditer un clip
- * Utilisé en mode brouillon (draft) pour permettre des modifications en temps réel
- *
- * @param {Array} allTags - Liste de tous les tags disponibles dans l'application
- * @param {Function} onSubmit - Callback appelé lors de la soumission du formulaire
- * @param {Function} onAddTag - Callback pour ajouter un nouveau tag à la liste globale
- * @param {Function} onCancel - Callback pour annuler la création/édition
- * @param {Function} onChange - Callback appelé à chaque modification pour mettre à jour le brouillon
- * @param {Object} initialData - Données initiales du clip (vide pour nouveau, rempli pour édition)
+ * Récupère automatiquement les infos Twitch dès que l'URL est ajoutée
  */
 function ClipForm({
   allTags,
@@ -20,40 +15,115 @@ function ClipForm({
   onChange,
   initialData,
 }) {
-  // ============================================
-  // ÉTATS LOCAUX DU FORMULAIRE
-  // ============================================
-
-  // Titre du clip
+  // États locaux du formulaire
   const [title, setTitle] = useState(initialData?.subject || "");
-
-  // URL du clip Twitch
   const [link, setLink] = useState(initialData?.link || "");
-
-  // Commentaire/description du clip
   const [comment, setComment] = useState(initialData?.comment || "");
-
-  // Tags sélectionnés pour ce clip
   const [tags, setTags] = useState(initialData?.tags || []);
-
-  // Indicateur si le clip nécessite une édition
   const [editable, setEditable] = useState(initialData?.editable || false);
-
-  // Saisie temporaire pour créer un nouveau tag
   const [newTag, setNewTag] = useState("");
 
-  // Récupère l'utilisateur connecté depuis Redux (pour l'auteur du clip)
+  // Nouveaux états pour gérer le chargement des infos Twitch
+  const [isLoadingTwitchInfo, setIsLoadingTwitchInfo] = useState(false);
+  const [twitchInfoError, setTwitchInfoError] = useState(null);
+  const [clipImage, setClipImage] = useState(initialData?.image || "");
+
   const user = useSelector((state) => state.user);
+
+  // ============================================
+  // EFFET : AUTO-REMPLISSAGE DES INFOS TWITCH
+  // ============================================
+  useEffect(() => {
+    // Ne déclenche la récupération que si :
+    // 1. Un lien est présent
+    // 2. Ce n'est pas un clip existant (pas d'initialData.clip_id ou c'est un draft)
+    // 3. Le lien a changé depuis le dernier chargement
+    if (!link || !link.trim()) {
+      return;
+    }
+
+    // Si c'est un clip existant (pas un draft), on ne récupère pas les infos
+    if (initialData?.clip_id && initialData.clip_id !== "draft") {
+      return;
+    }
+
+    // Fonction pour récupérer les infos Twitch
+    const fetchTwitchInfo = async () => {
+      setIsLoadingTwitchInfo(true);
+      setTwitchInfoError(null);
+
+      try {
+        // Encode l'URL du clip pour la passer en query parameter
+        const encodedLink = encodeURIComponent(link);
+
+        const response = await fetch(
+          `${BACK_URL}/clipmanager/clips/twitchinfo?link=${encodedLink}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: user.token,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.result && data.clipData) {
+          // Pré-remplit le titre si vide
+          if (!title || title === "Nouveau clip") {
+            setTitle(data.clipData.title);
+          }
+
+          // Sauvegarde l'image du clip
+          if (data.clipData.thumbnail_url) {
+            setClipImage(data.clipData.thumbnail_url);
+          }
+
+          // Émet les changements pour mettre à jour le brouillon
+          if (onChange) {
+            onChange({
+              ...initialData,
+              subject: data.clipData.title,
+              link,
+              tags,
+              editable,
+              draft: true,
+              image: data.clipData.thumbnail_url,
+              embed_url: data.clipData.embed_url,
+            });
+          }
+        } else {
+          // Gestion des erreurs
+          if (response.status === 409) {
+            setTwitchInfoError("Ce clip a déjà été proposé");
+          } else {
+            setTwitchInfoError(
+              data.error || "Impossible de récupérer les infos du clip"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Erreur lors de la récupération des infos Twitch:", err);
+        setTwitchInfoError("Erreur de connexion au serveur");
+      } finally {
+        setIsLoadingTwitchInfo(false);
+      }
+    };
+
+    // Délai avant de déclencher la requête (debounce)
+    const timeoutId = setTimeout(() => {
+      // Vérifie que l'URL ressemble à un lien Twitch valide
+      if (link.includes("twitch.tv")) {
+        fetchTwitchInfo();
+      }
+    }, 500); // Attend 500ms après la dernière modification
+
+    return () => clearTimeout(timeoutId);
+  }, [link]); // Se déclenche uniquement quand le lien change
 
   // ============================================
   // GESTION DES CHANGEMENTS EN TEMPS RÉEL
   // ============================================
-
-  /**
-   * Émet les changements vers le composant parent pour mettre à jour le brouillon
-   * Utilisé pour synchroniser l'état du formulaire avec l'état global
-   * Permet de ne pas perdre les modifications si l'utilisateur change de clip
-   */
   const emitChange = () => {
     if (onChange) {
       onChange({
@@ -63,6 +133,7 @@ function ClipForm({
         tags,
         editable,
         draft: true,
+        image: clipImage,
       });
     }
   };
@@ -70,120 +141,81 @@ function ClipForm({
   // ============================================
   // GESTION DES TAGS
   // ============================================
-
-  /**
-   * Ajoute ou retire un tag de la sélection
-   * Utilise setTimeout pour émettre le changement après la mise à jour de l'état
-   *
-   * @param {string} tag - Le tag à toggle
-   */
   const toggleTag = (tag) => {
     setTags((prev) => {
       const updated = prev.includes(tag)
-        ? prev.filter((t) => t !== tag) // Retire le tag s'il est déjà sélectionné
-        : [...prev, tag]; // Ajoute le tag s'il n'est pas sélectionné
-      setTimeout(emitChange, 0); // Émet le changement de manière asynchrone
+        ? prev.filter((t) => t !== tag)
+        : [...prev, tag];
+      setTimeout(emitChange, 0);
       return updated;
     });
   };
 
-  /**
-   * Crée un nouveau tag et l'ajoute à la fois à la liste globale et à la sélection du clip
-   * Vérifie que le tag n'existe pas déjà avant de l'ajouter
-   */
   const handleAddTag = () => {
     const trimmed = newTag.trim();
-    // Vérifie que le tag n'est pas vide et n'existe pas déjà
     if (trimmed && !allTags.includes(trimmed)) {
-      onAddTag(trimmed); // Ajoute à la liste globale
+      onAddTag(trimmed);
       setTags((prev) => {
-        const updated = [...prev, trimmed]; // Ajoute à la sélection du clip
+        const updated = [...prev, trimmed];
         setTimeout(emitChange, 0);
         return updated;
       });
     }
-    setNewTag(""); // Vide le champ de saisie
+    setNewTag("");
   };
 
   // ============================================
-  // EXTRACTION DE L'ID DU CLIP DEPUIS L'URL TWITCH
+  // EXTRACTION DE L'ID DU CLIP
   // ============================================
-
-  /**
-   * Extrait l'ID unique d'un clip depuis différents formats d'URL Twitch
-   * Gère 3 formats possibles :
-   * 1. URL directe : https://clips.twitch.tv/MonClipUnique
-   * 2. URL in situ : https://www.twitch.tv/Chaîne/clip/MonClipUnique
-   * 3. Paramètre URL : ?clip=MonClipUnique
-   *
-   * @param {string} link - L'URL complète du clip Twitch
-   * @returns {string|null} - L'ID du clip ou null si extraction impossible
-   */
   function extractClipId(link) {
     try {
       const url = new URL(link);
       const host = url.hostname;
 
-      // 1) URL directe de clips.twitch.tv
-      //    ex. https://clips.twitch.tv/MonClipUnique
       if (host === "clips.twitch.tv") {
-        // url.pathname === "/MonClipUnique"
-        return url.pathname.slice(1); // Retire le "/" initial
+        return url.pathname.slice(1);
       }
 
-      // 2) URL "in situ" sur twitch.tv
-      //    ex. https://www.twitch.tv/Chaîne/clip/MonClipUnique
       if (host.includes("twitch.tv") && url.pathname.includes("/clip/")) {
-        // Découpe après "/clip/" et retire tout ce qui pourrait suivre
         return url.pathname.split("/clip/")[1].split("/")[0];
       }
 
-      // 3) Cas paramètre ?clip=ID
       if (url.searchParams.has("clip")) {
         return url.searchParams.get("clip");
       }
 
-      return null; // Format d'URL non reconnu
+      return null;
     } catch (err) {
-      return null; // Erreur de parsing de l'URL
+      return null;
     }
   }
 
   // ============================================
   // SOUMISSION DU FORMULAIRE
   // ============================================
-
-  /**
-   * Gère la soumission du formulaire
-   * Extrait l'ID du clip, compile toutes les données et appelle le callback onSubmit
-   *
-   * @param {Event} e - L'événement de soumission du formulaire
-   */
   const handleSubmit = (e) => {
-    e.preventDefault(); // Empêche le rechargement de la page
+    e.preventDefault();
     onSubmit({
       ...initialData,
-      clip_id: extractClipId(link), // Extrait l'ID depuis l'URL
+      clip_id: extractClipId(link),
       subject: title,
       link,
       tags,
       editable,
-      draft: false, // Passe en mode publié
-      authorId: { username: user.username }, // Associe l'auteur
+      draft: false,
+      authorId: { username: user.username },
+      image: clipImage,
     });
   };
 
   // ============================================
   // RENDU DU FORMULAIRE
   // ============================================
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
       <h2 className="text-xl font-bold text-gray-100">Proposer un clip</h2>
 
-      {/* ============================================
-          CHAMP : URL DU CLIP
-          ============================================ */}
+      {/* CHAMP : URL DU CLIP */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Lien du clip
@@ -192,15 +224,33 @@ function ClipForm({
           type="url"
           value={link}
           onChange={(e) => setLink(e.target.value)}
-          onBlur={emitChange} // Sauvegarde lors de la perte de focus
+          onBlur={emitChange}
           required
           className="w-full p-2 border rounded"
+          placeholder="https://clips.twitch.tv/...   OU  https://www.twitch.tv/evoxia/clip/..."
         />
+
+        {/* Indicateur de chargement */}
+        {isLoadingTwitchInfo && (
+          <p className="text-sm text-blue-400 mt-1">
+            🔄 Récupération des infos du clip...
+          </p>
+        )}
+
+        {/* Affichage des erreurs */}
+        {twitchInfoError && (
+          <p className="text-sm text-red-400 mt-1">⚠️ {twitchInfoError}</p>
+        )}
+
+        {/* Confirmation du chargement réussi */}
+        {!isLoadingTwitchInfo && !twitchInfoError && clipImage && (
+          <p className="text-sm text-green-400 mt-1">
+            ✅ Infos du clip récupérées automatiquement
+          </p>
+        )}
       </div>
 
-      {/* ============================================
-          CHAMP : TITRE DU CLIP
-          ============================================ */}
+      {/* CHAMP : TITRE DU CLIP */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Titre
@@ -209,21 +259,18 @@ function ClipForm({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={emitChange} // Sauvegarde lors de la perte de focus
+          onBlur={emitChange}
           required
           className="w-full p-2 border rounded"
+          placeholder="Le titre sera rempli automatiquement"
         />
       </div>
 
-      {/* ============================================
-          SECTION : SÉLECTION DES TAGS
-          ============================================ */}
+      {/* SECTION : SÉLECTION DES TAGS */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Tags
         </label>
-
-        {/* Liste des tags existants (boutons toggle) */}
         <div className="flex flex-wrap gap-2 mb-2">
           {allTags.map((tag) => (
             <button
@@ -232,8 +279,8 @@ function ClipForm({
               onClick={() => toggleTag(tag)}
               className={`px-2 py-1 rounded text-sm border ${
                 tags.includes(tag)
-                  ? "bg-indigo-800 text-white border-indigo-500" // Tag sélectionné
-                  : "bg-white text-gray-700 border-gray-300" // Tag non sélectionné
+                  ? "bg-indigo-800 text-white border-indigo-500"
+                  : "bg-white text-gray-700 border-gray-300"
               }`}
             >
               {tag}
@@ -241,7 +288,6 @@ function ClipForm({
           ))}
         </div>
 
-        {/* Champ pour créer un nouveau tag */}
         <div className="flex gap-2">
           <input
             type="text"
@@ -260,9 +306,7 @@ function ClipForm({
         </div>
       </div>
 
-      {/* ============================================
-          CHECKBOX : À ÉDITER
-          ============================================ */}
+      {/* CHECKBOX : À ÉDITER */}
       <div className="flex items-center text-gray-100 gap-2">
         <input
           id="editable"
@@ -271,7 +315,7 @@ function ClipForm({
           onChange={(e) => {
             const newValue = e.target.checked;
             setEditable(newValue);
-            emitChange(); // Sauvegarde immédiate du changement
+            emitChange();
           }}
         />
         <label htmlFor="editable" className="text-sm">
@@ -279,9 +323,7 @@ function ClipForm({
         </label>
       </div>
 
-      {/* ============================================
-          CHAMP : COMMENTAIRE
-          ============================================ */}
+      {/* CHAMP : COMMENTAIRE */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Commentaire
@@ -289,24 +331,21 @@ function ClipForm({
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          onBlur={emitChange} // Sauvegarde lors de la perte de focus
+          onBlur={emitChange}
           rows="3"
           className="w-full p-2 border rounded"
         />
       </div>
 
-      {/* ============================================
-          BOUTONS D'ACTION
-          ============================================ */}
+      {/* BOUTONS D'ACTION */}
       <div className="flex gap-2">
-        {/* Bouton de soumission - publie le clip */}
         <button
           type="submit"
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          disabled={isLoadingTwitchInfo}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          Soumettre
+          {isLoadingTwitchInfo ? "Chargement..." : "Soumettre"}
         </button>
-        {/* Bouton d'annulation - ferme le formulaire et supprime le brouillon */}
         <button
           type="button"
           onClick={onCancel}
