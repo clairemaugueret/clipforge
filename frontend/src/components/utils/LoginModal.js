@@ -1,5 +1,5 @@
 import twitchLogo from "../images/twitch_logo_white.png";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 
 export default function LoginModal({ onClose, onLogout }) {
   //CLAIRE

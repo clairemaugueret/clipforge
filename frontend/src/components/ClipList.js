@@ -1,6 +1,5 @@
 import { formatHumanDate } from "./utils/date";
 import default_user from "./images/default_user.png";
-import { useSelector, useDispatch } from "react-redux";
 
 function ClipList({
   clips,
@@ -9,9 +8,7 @@ function ClipList({
   users = [],
   expertVotes = {},
 }) {
-  const experts = users.filter((u) => u.profil === "expert");
-
-  const user = useSelector((state) => state.user);
+  const experts = users.filter((u) => u.role === "EXPERT");
 
   const borderColor = (vote) => {
     return vote === "oui"
@@ -57,12 +54,13 @@ function ClipList({
 
               <div className="flex gap-2 pr-2">
                 {experts.map((user) => {
-                  const vote = expertVotes[user.pseudo];
+                  const vote = expertVotes[user.username];
                   return (
                     <img
-                      key={user.pseudo}
-                      src={user.userImage || default_user}
-                      title={user.pseudo}
+                      key={user.username}
+                      src={user.avatar_url || default_user}
+                      alt={user.username}
+                      title={user.username}
                       className={`w-6 h-6 rounded-full ring-2 ${borderColor(vote)}`}
                     />
                   );

@@ -4,7 +4,6 @@ import ExpertVoteModale from "./utils/vote";
 import EditClaimModal from "./utils/EditClaimModal";
 import ConfirmDeleteModal from "./utils/ConfirmDeleteModal";
 import default_user from "./images/default_user.png";
-import { useSelector, useDispatch } from "react-redux";
 
 export default function ClipViewer({
   clip,
@@ -20,9 +19,7 @@ export default function ClipViewer({
   const [showEditModal, setShowEditModal] = useState(false);
   const [votingExpertPseudo, setVotingExpertPseudo] = useState(null);
 
-  const experts = users.filter((u) => u.profil === "expert");
-
-  const user = useSelector((state) => state.user);
+  const experts = users.filter((u) => u.role === "EXPERT");
 
   const addComment = () => {
     if (!commentInput.trim()) return;
@@ -128,12 +125,13 @@ export default function ClipViewer({
 
             <div className="flex gap-2">
               {experts.map((user) => {
-                const vote = expertVotes[user.pseudo];
+                const vote = expertVotes[user.username];
                 return (
                   <img
-                    key={user.pseudo}
-                    src={user.userImage || default_user}
-                    title={user.pseudo}
+                    key={user.username}
+                    src={user.avatar_url || default_user}
+                    alt={user.username}
+                    title={user.username}
                     className={`w-14 h-14 rounded-full ring-2 ${borderColor(vote)}`}
                   />
                 );
