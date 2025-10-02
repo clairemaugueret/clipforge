@@ -55,12 +55,6 @@ function App() {
   // Liste de tous les tags disponibles dans l'application
   const [allTags, setAllTags] = useState([]);
 
-  // Stocke temporairement le clip en mode brouillon (ID "draft")
-  const [draftClip, setDraftClip] = useState(null);
-
-  // Protection contre les requêtes d'authentification multiples
-  const [isAuthInProgress, setIsAuthInProgress] = useState(false);
-
   // Indique si on affiche les clips archivés ou les clips actifs
   const [showArchived, setShowArchived] = useState(false);
 
@@ -134,8 +128,6 @@ function App() {
       createdAt: new Date(),
     };
 
-    setDraftClip(newDraft);
-
     // Retire l'ancien brouillon s'il existe et ajoute le nouveau en tête
     setClips((prev) => {
       const withoutOldDraft = prev.filter((clip) => clip.clip_id !== "draft");
@@ -181,7 +173,6 @@ function App() {
 
       // Supprime le brouillon de la liste
       setClips((prev) => prev.filter((clip) => clip.clip_id !== "draft"));
-      setDraftClip(null);
     }
 
     setShowForm(false);
@@ -203,7 +194,6 @@ function App() {
       prev.map((clip) => (clip.clip_id === "draft" ? updated : clip))
     );
 
-    setDraftClip(updated);
     setSelectedClipId("draft");
   };
 
@@ -289,7 +279,6 @@ function App() {
 
           // 5. Nettoyer le formulaire
           setShowForm(false);
-          setDraftClip(null);
         }
       } else {
         console.error("Erreur:", data.error);
@@ -336,7 +325,6 @@ function App() {
 
           // 5. Nettoyer le formulaire
           setShowForm(false);
-          setDraftClip(null);
         }
       } else {
         console.error("Erreur:", data.error);
@@ -414,7 +402,12 @@ function App() {
       const data = await response.json();
 
       if (data.result) {
-        setClips(data.clips);
+        const normalized = data.clips.map((c) => ({
+          ...c,
+          votes: Array.isArray(c.votes) ? c.votes : [],
+          comments: Array.isArray(c.comments) ? c.comments : [],
+        }));
+        setClips(normalized);
         setShowArchived(true);
         setSelectedClipId(null); // Réinitialise la sélection
       } else {
@@ -470,7 +463,7 @@ function App() {
   const userLogout = () => {
     if (user.username) {
       dispatch(logout());
-      alert("Déconnexion réussie !");
+      alert("✅ Déconnexion réussie !");
     }
   };
 
@@ -511,43 +504,55 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
 
-    // Si un code d'autorisation Twitch est présent dans l'URL ET qu'aucune auth n'est en cours
-    if (code && !isAuthInProgress) {
-      setIsAuthInProgress(true); // Bloque d'autres tentatives simultanées
+    // Rien à faire si pas de code
+    if (!code) return;
 
-      fetch(`${BACK_URL}/clipmanager/users/authtwitch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.result) {
-            // Connecte l'utilisateur via Redux
-            dispatch(
-              login({
-                token: data.user.token,
-                username: data.user.username,
-                avatar_url: data.user.avatar_url,
-              })
-            );
-            // Nettoie l'URL pour enlever le code (sécurité et esthétique)
-            window.history.replaceState({}, document.title, "/");
-            alert("Connexion réussie !");
-          } else {
-            console.error("Erreur d'authentification:", data.error);
-            alert("Échec de la connexion. Réessayez.");
-          }
-        })
-        .catch((err) => {
-          console.error("Erreur de connexion:", err);
-          alert("Erreur de connexion");
-        })
-        .finally(() => {
-          setIsAuthInProgress(false); // Débloque pour une prochaine tentative
-        });
+    // ✅ Anti-double-montage (React 18 StrictMode) :
+    // si ce "code" a déjà été traité dans cette session, on sort.
+    const handledKey = `twitch_oauth_code_${code}`;
+    if (sessionStorage.getItem(handledKey)) {
+      return;
     }
-  }, [dispatch, isAuthInProgress]);
+    sessionStorage.setItem(handledKey, "1");
+
+    // (Optionnel) si déjà connecté, inutile d'appeler l'API
+    if (user?.username) {
+      // On nettoie l'URL pour enlever le code et on sort
+      window.history.replaceState({}, document.title, "/");
+      return;
+    }
+
+    fetch(`${BACK_URL}/clipmanager/users/authtwitch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.result) {
+          dispatch(
+            login({
+              token: data.user.token,
+              username: data.user.username,
+              avatar_url: data.user.avatar_url,
+            })
+          );
+          // Nettoie l'URL IMMÉDIATEMENT après succès
+          window.history.replaceState({}, document.title, "/");
+          alert("✅ Connexion réussie !");
+        } else {
+          // Si le code a déjà été consommé, on évite d’alerter si on est déjà connecté
+          if (!user?.username) {
+            alert(`❌ Échec de la connexion. ${data.error || "Réessayez."}`);
+          }
+        }
+      })
+      .catch(() => {
+        if (!user?.username) {
+          alert("❌ Erreur de connexion");
+        }
+      });
+  }, [dispatch, user?.username]);
 
   // ============================================
   // EFFET : CHARGEMENT DE LA LISTE DES USERS DE LA BASE DE DONNÉES
@@ -637,9 +642,13 @@ function App() {
           HEADER : Titre et bouton de connexion
           ============================================ */}
       <header className="bg-indigo-950 p-4 shadow-md flex justify-between items-center">
-        <h1 className="text-xl font-bold text-white">
+        <h1
+          onClick={() => (window.location.href = "/")}
+          className="text-xl font-bold text-white cursor-pointer hover:text-indigo-900 transition-colors"
+          title="Retour à l'accueil"
+        >
           🎬 Clips Manager{" "}
-          <span className="text-base text-indigo-400">
+          <span className="text-base text-indigo-500 opacity-50">
             • TikTok @evoxia.clips
           </span>
         </h1>
@@ -647,18 +656,20 @@ function App() {
 
         <div className="flex justify-between items-center">
           {user.username ? (
-            <p className="text-white text-sm mr-4 font-medium">
+            <p className="text-indigo-400 opacity-40 text-sm mr-4 font-medium italic">
               Connecté en tant que{" "}
-              <span className="font-semibold">{user.username}</span>
+              <span className="font-bold not-italic">{user.username}</span>
             </p>
           ) : (
-            <p className="text-white text-sm mr-4 font-medium">Se connecter</p>
+            <p className="text-indigo-400 opacity-70 text-sm mr-4 font-medium">
+              Se connecter
+            </p>
           )}
           <img
             src={user.avatar_url || default_user}
             alt="Avatar"
             onClick={() => setShowLoginModal(true)}
-            className="w-10 h-10 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+            className="w-10 h-10 rounded-full cursor-pointer hover:opacity-80 transition-opacity "
             title={
               user.username
                 ? `Connecté en tant que ${user.username}`

@@ -465,10 +465,24 @@ async function getArchivedClips(req, res) {
       where: { status: "ARCHIVED" },
       order: [["createdAt", "DESC"]], // Trie du plus récent au plus ancien
     });
+
+    // Harmonise les données comme pour /all
+    await populateClipData(archivedClips);
+
+    // Ceinture + bretelles : s'assurer que votes/comments sont des tableaux
+    const normalized = archivedClips.map((c) => {
+      const plain = typeof c.toJSON === "function" ? c.toJSON() : c;
+      return {
+        ...plain,
+        votes: Array.isArray(plain.votes) ? plain.votes : [],
+        comments: Array.isArray(plain.comments) ? plain.comments : [],
+      };
+    });
+
     res.status(200).json({
       result: true,
-      count: archivedClips.length,
-      clips: archivedClips,
+      count: normalized.length,
+      clips: normalized,
     });
   } catch (error) {
     console.error("Error fetching archived clips:", error);

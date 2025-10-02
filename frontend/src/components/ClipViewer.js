@@ -392,9 +392,9 @@ export default function ClipViewer({
               <div className="flex gap-3">
                 {experts.map((expert) => {
                   // Trouve le vote de cet expert dans clip.votes
-                  const expertVote = clip.votes?.find(
-                    (v) => v.userName === expert.username
-                  );
+                  const expertVote = Array.isArray(clip.votes)
+                    ? clip.votes.find((v) => v.userName === expert.username)
+                    : undefined;
                   const vote = expertVote?.result;
 
                   return (
@@ -414,9 +414,11 @@ export default function ClipViewer({
                 <div className="flex gap-2">
                   {regularUsers.map((regularUser) => {
                     // Trouve le vote de cet utilisateur dans clip.votes
-                    const userVote = clip.votes?.find(
-                      (v) => v.userName === regularUser.username
-                    );
+                    const userVote = Array.isArray(clip.votes)
+                      ? clip.votes.find(
+                          (v) => v.userName === regularUser.username
+                        )
+                      : undefined;
                     const vote = userVote?.result;
 
                     return (
@@ -513,7 +515,7 @@ export default function ClipViewer({
       {showDeleteModal && (
         <ConfirmDeleteModal
           onConfirm={() => {
-            onDeleteClip?.(clip._id); // Supprime le clip via le callback parent
+            onDeleteClip?.(clip.clip_id); // Supprime le clip via le callback parent
             setShowDeleteModal(false);
           }}
           onCancel={() => setShowDeleteModal(false)}

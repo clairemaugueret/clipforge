@@ -105,9 +105,9 @@ function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
               <div className="flex gap-2 pr-2">
                 {experts.map((expert) => {
                   // Trouve le vote de cet expert dans clip.votes
-                  const expertVote = clip.votes?.find(
-                    (v) => v.userName === expert.username
-                  );
+                  const expertVote = Array.isArray(clip.votes)
+                    ? clip.votes.find((v) => v.userName === expert.username)
+                    : undefined;
                   const vote = expertVote?.result;
 
                   return (
