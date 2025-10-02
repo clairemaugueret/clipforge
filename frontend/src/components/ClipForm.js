@@ -5,7 +5,7 @@ const BACK_URL = process.env.REACT_APP_BACK_URL;
 
 /**
  * Composant formulaire pour créer ou éditer un clip
- * Récupère automatiquement les infos Twitch dès que l'URL est ajoutée
+ * Récupère automatiquement les infos Twitch dès que l'URL est ajoutée (SAUF en mode édition)
  */
 function ClipForm({
   allTags,
@@ -30,19 +30,27 @@ function ClipForm({
 
   const user = useSelector((state) => state.user);
 
+  // Détermine si on est en mode édition ou création
+  const isEditMode = initialData?.originalClipId !== undefined;
+
   // ============================================
   // EFFET : AUTO-REMPLISSAGE DES INFOS TWITCH
   // ============================================
   useEffect(() => {
     // Ne déclenche la récupération que si :
     // 1. Un lien est présent
-    // 2. Ce n'est pas un clip existant (pas d'initialData.clip_id ou c'est un draft)
-    // 3. Le lien a changé depuis le dernier chargement
+    // 2. Ce n'est pas un clip existant en cours de modification
     if (!link || !link.trim()) {
       return;
     }
 
-    // Si c'est un clip existant (pas un draft), on ne récupère pas les infos
+    // Si c'est une MODIFICATION d'un clip existant (présence de originalClipId)
+    // on ne récupère PAS les infos Twitch pour éviter l'erreur "clip déjà proposé"
+    if (initialData?.originalClipId) {
+      return;
+    }
+
+    // Si c'est un clip existant (pas un draft de création), on ne récupère pas les infos
     if (initialData?.clip_id && initialData.clip_id !== "draft") {
       return;
     }
@@ -205,6 +213,7 @@ function ClipForm({
       draft: false,
       authorId: { username: user.username },
       image: clipImage,
+      comment, // Ajout du commentaire pour modification
     });
   };
 
@@ -213,7 +222,9 @@ function ClipForm({
   // ============================================
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-      <h2 className="text-xl font-bold text-gray-100">Proposer un clip</h2>
+      <h2 className="text-xl font-bold text-gray-100">
+        {isEditMode ? "Modifier le clip" : "Proposer un clip"}
+      </h2>
 
       {/* CHAMP : URL DU CLIP */}
       <div>
@@ -226,28 +237,41 @@ function ClipForm({
           onChange={(e) => setLink(e.target.value)}
           onBlur={emitChange}
           required
-          className="w-full p-2 border rounded"
+          disabled={isEditMode} // ⭐ Désactive en mode édition
+          className={`w-full p-2 border rounded ${
+            isEditMode ? "bg-gray-600 cursor-not-allowed" : ""
+          }`}
           placeholder="https://clips.twitch.tv/...   OU  https://www.twitch.tv/evoxia/clip/..."
         />
 
-        {/* Indicateur de chargement */}
-        {isLoadingTwitchInfo && (
+        {/* Indicateur en mode édition */}
+        {isEditMode && (
+          <p className="text-sm text-gray-400 mt-1">
+            ℹ️ Le lien ne peut pas être modifié
+          </p>
+        )}
+
+        {/* Indicateur de chargement (uniquement en mode création) */}
+        {!isEditMode && isLoadingTwitchInfo && (
           <p className="text-sm text-blue-400 mt-1">
             🔄 Récupération des infos du clip...
           </p>
         )}
 
-        {/* Affichage des erreurs */}
-        {twitchInfoError && (
+        {/* Affichage des erreurs (uniquement en mode création) */}
+        {!isEditMode && twitchInfoError && (
           <p className="text-sm text-red-400 mt-1">⚠️ {twitchInfoError}</p>
         )}
 
-        {/* Confirmation du chargement réussi */}
-        {!isLoadingTwitchInfo && !twitchInfoError && clipImage && (
-          <p className="text-sm text-green-400 mt-1">
-            ✅ Infos du clip récupérées automatiquement
-          </p>
-        )}
+        {/* Confirmation du chargement réussi (uniquement en mode création) */}
+        {!isEditMode &&
+          !isLoadingTwitchInfo &&
+          !twitchInfoError &&
+          clipImage && (
+            <p className="text-sm text-green-400 mt-1">
+              ✅ Infos du clip récupérées automatiquement
+            </p>
+          )}
       </div>
 
       {/* CHAMP : TITRE DU CLIP */}
@@ -262,7 +286,11 @@ function ClipForm({
           onBlur={emitChange}
           required
           className="w-full p-2 border rounded"
-          placeholder="Le titre sera rempli automatiquement"
+          placeholder={
+            isEditMode
+              ? "Modifier le titre"
+              : "Le titre sera rempli automatiquement"
+          }
         />
       </div>
 
@@ -326,7 +354,7 @@ function ClipForm({
       {/* CHAMP : COMMENTAIRE */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
-          Commentaire
+          Commentaire {isEditMode && "(optionnel)"}
         </label>
         <textarea
           value={comment}
@@ -334,6 +362,11 @@ function ClipForm({
           onBlur={emitChange}
           rows="3"
           className="w-full p-2 border rounded"
+          placeholder={
+            isEditMode
+              ? "Ajouter un commentaire sur cette modification..."
+              : "Ajouter un commentaire..."
+          }
         />
       </div>
 
@@ -341,10 +374,14 @@ function ClipForm({
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={isLoadingTwitchInfo}
+          disabled={!isEditMode && isLoadingTwitchInfo}
           className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          {isLoadingTwitchInfo ? "Chargement..." : "Soumettre"}
+          {!isEditMode && isLoadingTwitchInfo
+            ? "Chargement..."
+            : isEditMode
+              ? "Enregistrer les modifications"
+              : "Soumettre"}
         </button>
         <button
           type="button"

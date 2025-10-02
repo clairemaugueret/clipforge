@@ -47,7 +47,7 @@ function App() {
   const [showForm, setShowForm] = useState(false);
 
   // Liste de tous les tags disponibles dans l'application
-  const [allTags, setAllTags] = useState(["valorant", "fun", "chat"]);
+  const [allTags, setAllTags] = useState([]);
 
   // Stocke temporairement le clip en mode brouillon (ID "draft")
   const [draftClip, setDraftClip] = useState(null);
@@ -217,10 +217,10 @@ function App() {
   // ============================================
 
   /**
-   * Convertit un clip publié en brouillon pour l'éditer
+   * Convertit un clip proposé en brouillon pour le modifier
    * Crée une copie avec l'ID "draft" pour ne pas modifier l'original
    */
-  const handleEditClip = () => {
+  const handleModifyClip = () => {
     if (!selectedClipId) return;
 
     const clipToEdit = clips.find((c) => c.clip_id === selectedClipId);
@@ -231,9 +231,10 @@ function App() {
       ...clipToEdit,
       draft: true,
       clip_id: "draft",
+      originalClipId: clipToEdit.clip_id, // Conserve l'ID original
     };
 
-    // Ajoute le brouillon à la liste (en supprimant tout ancien brouillon)
+    // Ajoute le brouillon à la liste
     setClips((prev) => [
       ...prev.filter((c) => c.clip_id !== "draft"),
       draftClip,
@@ -241,6 +242,51 @@ function App() {
 
     setSelectedClipId("draft");
     setShowForm(true);
+  };
+
+  /**
+   * Envoie les modifications du clip en brouillon pour le modifier vers le backend
+   */
+  const updateExistingClip = async (clip) => {
+    try {
+      // 1. Mettre à jour le clip via la route PUT
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/update`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: user.token,
+          clipId: clip.originalClipId, // ID du clip original
+          subject: clip.subject,
+          tags: clip.tags,
+          editable: clip.editable,
+          text: clip.comment,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        // 2. Re-fetch la liste des clips depuis la DB
+        const clipsResponse = await fetch(`${BACK_URL}/clipmanager/clips/all`);
+        const clipsData = await clipsResponse.json();
+
+        if (clipsData.result) {
+          // 3. Mettre à jour l'état avec la liste fraîche
+          setClips(clipsData.clips);
+
+          // 4. Sélectionner le clip modifié
+          setSelectedClipId(data.clip.clip_id);
+
+          // 5. Nettoyer le formulaire
+          setShowForm(false);
+          setDraftClip(null);
+        }
+      } else {
+        alert(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      alert("Erreur lors de la modification du clip");
+    }
   };
 
   // ============================================
@@ -383,11 +429,16 @@ function App() {
             );
             // Nettoie l'URL pour enlever le code (sécurité et esthétique)
             window.history.replaceState({}, document.title, "/");
+            alert("✅ Connexion réussie !");
           } else {
-            console.error(data.error);
+            console.error("Erreur d'authentification:", data.error);
+            alert("❌ Échec de la connexion. Réessayez.");
           }
         })
-        .catch((err) => console.error("Erreur backend :", err))
+        .catch((err) => {
+          console.error("Erreur de connexion:", err);
+          alert("❌ Erreur de connexion");
+        })
         .finally(() => {
           setIsAuthInProgress(false); // Débloque pour une prochaine tentative
         });
@@ -434,6 +485,12 @@ function App() {
         }
         const data = await response.json();
         setClips(data.clips);
+
+        // 🆕 EXTRACTION AUTOMATIQUE DES TAGS UNIQUES
+        const uniqueTags = [
+          ...new Set(data.clips.flatMap((clip) => clip.tags || [])),
+        ];
+        setAllTags(uniqueTags);
       } catch (error) {
         console.error("Erreur lors du chargement des clips :", error);
       }
@@ -453,7 +510,7 @@ function App() {
           ============================================ */}
       <header className="bg-indigo-950 p-4 shadow-md flex justify-between items-center">
         <h1 className="text-xl font-bold text-white">
-          Clips Manager{" "}
+          🎬 Clips Manager{" "}
           <span className="text-base text-indigo-400">
             • TikTok @evoxia.clips
           </span>
@@ -497,7 +554,7 @@ function App() {
                   onClick={() => setShowFilterModal(true)}
                   className="text-sm text-indigo-400 hover:text-indigo-500"
                 >
-                  Filtrer
+                  🏷️ Filtrer
                 </button>
               </div>
 
@@ -518,7 +575,7 @@ function App() {
                   onClick={handleProposeClick}
                   className="w-full px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
                 >
-                  Proposer un clip
+                  📩 Proposer un clip
                 </button>
               </div>
             </>
@@ -537,7 +594,11 @@ function App() {
               {showForm && selectedClip ? (
                 <ClipForm
                   allTags={allTags}
-                  onSubmit={addNewClip}
+                  onSubmit={
+                    selectedClip.originalClipId
+                      ? updateExistingClip // Modification d'un clip existant
+                      : addNewClip // Création d'un nouveau clip
+                  }
                   onAddTag={addNewTag}
                   onCancel={handleCancelForm}
                   onChange={handleDraftUpdate}
@@ -553,7 +614,7 @@ function App() {
                     onExpertVote={(pseudo, vote) =>
                       handleExpertVote(selectedClipId, pseudo, vote)
                     }
-                    onEditClip={handleEditClip}
+                    onModifyClip={handleModifyClip}
                     onDeleteClip={handleDeleteClip}
                     onClipUpdate={handleClipUpdate}
                   />
@@ -590,9 +651,9 @@ function App() {
                       href={selectedClip.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-center w-32"
+                      className="text-sm bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 text-center w-36"
                     >
-                      Voir sur Twitch
+                      🎥 Voir sur Twitch
                     </a>
                   )}
                 </>

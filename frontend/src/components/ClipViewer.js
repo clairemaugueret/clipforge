@@ -4,7 +4,6 @@ import ExpertVoteModale from "./utils/vote";
 import EditClaimModal from "./utils/EditClaimModal";
 import ConfirmDeleteModal from "./utils/ConfirmDeleteModal";
 import default_user from "./images/default_user.png";
-import { useSelector } from "react-redux";
 
 /**
  * Composant principal d'affichage détaillé d'un clip
@@ -27,7 +26,7 @@ export default function ClipViewer({
   user,
   expertVotes = {},
   onExpertVote,
-  onEditClip,
+  onModifyClip,
   onDeleteClip,
   onClipUpdate,
 }) {
@@ -235,26 +234,46 @@ export default function ClipViewer({
         {/* ============================================
             BARRE D'ACTIONS : 3 colonnes
             ============================================ */}
-        <div className="grid grid-cols-3 items-center mb-6 px-2">
+        <div className="grid auto-cols-auto grid-flow-col items-center gap-4">
           {/* COLONNE 1 : Boutons Modifier et Supprimer */}
-          <div className="flex justify-start">
+          <div className="flex justify-start gap-2">
             <button
-              onClick={onEditClip}
-              className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
+              onClick={onModifyClip}
+              disabled={user.username !== clip.authorId.username}
+              className={`text-sm px-3 py-1 text-white rounded font-medium ${
+                user.username === clip.authorId.username
+                  ? "bg-gray-600 hover:bg-gray-700 cursor-pointer "
+                  : "bg-gray-600 cursor-not-allowed opacity-75"
+              }`}
+              title={
+                user.username === clip.authorId.username
+                  ? "Clique pour modifier les infos du clip"
+                  : "Seul l'auteur de la proposition peut la modifier"
+              }
             >
               Modifier
             </button>
 
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="px-3 py-1 ml-4 bg-red-700 text-white rounded hover:bg-red-800 text-sm"
+              disabled={user.username !== clip.authorId.username}
+              className={`text-sm px-3 py-1 text-white rounded font-medium ${
+                user.username === clip.authorId.username
+                  ? "bg-red-700 hover:bg-red-800 cursor-pointer "
+                  : "bg-red-700 cursor-not-allowed opacity-75"
+              }`}
+              title={
+                user.username === clip.authorId.username
+                  ? "Clique pour supprimer ce clip proposé"
+                  : "Seul l'auteur de la proposition peut la supprimer"
+              }
             >
               Supprimer
             </button>
           </div>
 
           {/* COLONNE 2 : Indicateur "À éditer" (si applicable) */}
-          <div className="flex justify-left">
+          <div className="flex justify-center">
             {clip.editable && !clip.edit_progress && (
               <button
                 onClick={() => setShowEditModal(true)}
