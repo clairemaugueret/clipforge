@@ -33,7 +33,7 @@ export default function LoginModal({ onClose, onLogout }) {
    */
   const CLIENT_ID = process.env.REACT_APP_TWITCH_CLIENT_ID;
   const REDIRECT_URI = process.env.REACT_APP_TWITCH_REDIRECT_URI;
-  const SCOPE = "user:read:email channel:manage:clips";
+  const SCOPE = "user:read:email editor:manage:clips";
 
   // ============================================
   // FONCTION : INITIER LA CONNEXION TWITCH
