@@ -9,15 +9,8 @@ import default_user from "./images/default_user.png";
  * @param {Function} onSelect - Callback appelé lors de la sélection d'un clip
  * @param {string} selectedClipId - ID du clip actuellement sélectionné (pour le highlighting)
  * @param {Array} users - Liste complète des utilisateurs (pour filtrer les experts)
- * @param {Object} expertVotes - Objet contenant les votes par clip { clipId: { username: "oui"/"non"/"à revoir" } }
  */
-function ClipList({
-  clips,
-  onSelect,
-  selectedClipId,
-  users = [],
-  expertVotes = {},
-}) {
+function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
   // ============================================
   // FILTRAGE DES EXPERTS
   // ============================================
@@ -35,17 +28,17 @@ function ClipList({
   /**
    * Détermine la classe CSS du ring coloré autour de l'avatar selon le vote
    *
-   * @param {string} vote - Le vote de l'expert: "oui", "non", "à revoir" ou undefined
+   * @param {string} vote - Le vote de l'expert: "OK", "KO", "toReview" ou undefined
    * @returns {string} - Classes Tailwind pour le ring coloré
    */
   const borderColor = (vote) => {
-    return vote === "oui"
-      ? "ring-4 ring-green-500" // Vote positif = vert
-      : vote === "non"
-        ? "ring-4 ring-red-600" // Vote négatif = rouge
-        : vote === "à revoir"
-          ? "ring-4 ring-amber-400" // À revoir = ambre/jaune
-          : "ring-transparent"; // Pas encore voté = transparent
+    return vote === "OK"
+      ? "ring-3 ring-green-500" // Vote positif = vert
+      : vote === "KO"
+        ? "ring-3 ring-red-600" // Vote négatif = rouge
+        : vote === "toReview"
+          ? "ring-3 ring-orange-500" // À revoir = orange
+          : "ring-3 ring-gray-500"; // Pas encore voté = gris
   };
 
   // ============================================
@@ -79,7 +72,7 @@ function ClipList({
 
               {/* Nom de l'auteur */}
               <p className="text-xs text-gray-400">
-                par {clip.authorId.username || "Inconnu"}
+                par {clip.authorId?.username || "Inconnu"}
               </p>
 
               <div className="flex justify-between items-center">
@@ -110,15 +103,19 @@ function ClipList({
 
               {/* Avatars des experts avec indicateur de vote coloré */}
               <div className="flex gap-2 pr-2">
-                {experts.map((user) => {
-                  // Récupère le vote de cet expert pour ce clip
-                  const vote = expertVotes[user.username];
+                {experts.map((expert) => {
+                  // Trouve le vote de cet expert dans clip.votes
+                  const expertVote = clip.votes?.find(
+                    (v) => v.userName === expert.username
+                  );
+                  const vote = expertVote?.result;
+
                   return (
                     <img
-                      key={user.username}
-                      src={user.avatar_url || default_user} // Avatar ou image par défaut
-                      alt={user.username}
-                      title={user.username} // Tooltip au survol
+                      key={expert.username}
+                      src={expert.avatar_url || default_user} // Avatar ou image par défaut
+                      alt={expert.username}
+                      title={expert.username} // Tooltip au survol
                       className={`w-6 h-6 rounded-full ring-2 ${borderColor(vote)}`}
                     />
                   );

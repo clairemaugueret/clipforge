@@ -1,3 +1,6 @@
+// Script de maintenance ponctuel pour nettoyer les données existantes corrompues
+// À lancer via le terminal avec la commande suivante : node scripts/fixJsonFields.js
+
 const Clip = require("../models/Clip");
 
 async function fixJsonFields() {

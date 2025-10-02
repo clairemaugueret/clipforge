@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import ClipList from "./components/ClipList";
 import ClipViewer from "./components/ClipViewer";
 import ClipForm from "./components/ClipForm";
-import TagFilterModal from "./components/utils/TagFilterModal";
+import FilterModal from "./components/utils/FilterModal";
 import LoginModal from "./components/utils/LoginModal";
 import default_user from "./components/images/default_user.png";
 // Import des hooks Redux pour la gestion de l'état global de l'utilisateur
@@ -37,7 +37,13 @@ function App() {
   // Tags sélectionnés pour filtrer la liste des clips
   const [selectedTags, setSelectedTags] = useState([]);
 
-  // Affichage de la modale de filtrage par tags
+  // Statuts sélectionnés pour filtrer la liste des clips
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
+
+  // Statuts d'édition sélectionnés pour filtrer la liste des clips
+  const [selectedEditStatuses, setSelectedEditStatuses] = useState([]);
+
+  // Affichage de la modale de filtrage par tags et statuts
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   // Affichage de la modale de connexion/déconnexion
@@ -52,12 +58,11 @@ function App() {
   // Stocke temporairement le clip en mode brouillon (ID "draft")
   const [draftClip, setDraftClip] = useState(null);
 
-  // Objet stockant les votes des experts par clip
-  // Structure: { clipId: { pseudo: "oui"/"non"/"à revoir" } }
-  const [expertVotes, setExpertVotes] = useState({});
-
   // Protection contre les requêtes d'authentification multiples
   const [isAuthInProgress, setIsAuthInProgress] = useState(false);
+
+  // Indique si on affiche les clips archivés ou les clips actifs
+  const [showArchived, setShowArchived] = useState(false);
 
   // ============================================
   // VARIABLES DÉRIVÉES
@@ -67,7 +72,7 @@ function App() {
   const selectedClip = clips.find((c) => c.clip_id === selectedClipId);
 
   // ============================================
-  // FONCTIONS DE GESTION DES TAGS
+  // FONCTIONS DE GESTION DES FILTRES
   // ============================================
 
   /**
@@ -80,29 +85,34 @@ function App() {
   };
 
   /**
+   * Ajoute ou retire un statut de la sélection pour le filtrage
+   */
+  const toggleStatus = (status) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(status)
+        ? prev.filter((s) => s !== status)
+        : [...prev, status]
+    );
+  };
+
+  /**
+   * Ajoute ou retire un statut d'édition de la sélection pour le filtrage
+   */
+  const toggleEditStatus = (editStatus) => {
+    setSelectedEditStatuses((prev) =>
+      prev.includes(editStatus)
+        ? prev.filter((e) => e !== editStatus)
+        : [...prev, editStatus]
+    );
+  };
+
+  /**
    * Ajoute un nouveau tag à la liste globale des tags
    */
   const addNewTag = (newTag) => {
     if (!allTags.includes(newTag)) {
       setAllTags((prev) => [...prev, newTag]);
     }
-  };
-
-  // ============================================
-  // GESTION DES VOTES EXPERTS
-  // ============================================
-
-  /**
-   * Enregistre le vote d'un expert sur un clip
-   */
-  const handleExpertVote = (clipId, pseudo, vote) => {
-    setExpertVotes((prev) => ({
-      ...prev,
-      [clipId]: {
-        ...(prev[clipId] || {}),
-        [pseudo]: vote,
-      },
-    }));
   };
 
   // ============================================
@@ -266,7 +276,7 @@ function App() {
       const data = await response.json();
 
       if (data.result) {
-        // 2. Re-fetch la liste des clips depuis la DB
+        // 2. Re-fetch TOUTE la liste des clips depuis la DB
         const clipsResponse = await fetch(`${BACK_URL}/clipmanager/clips/all`);
         const clipsData = await clipsResponse.json();
 
@@ -282,24 +292,21 @@ function App() {
           setDraftClip(null);
         }
       } else {
+        console.error("Erreur:", data.error);
         alert(`Erreur : ${data.error}`);
       }
     } catch (err) {
+      console.error("Erreur backend :", err);
       alert("Erreur lors de la modification du clip");
     }
   };
 
-  // ============================================
-  // PUBLICATION D'UN NOUVEAU CLIP
-  // ============================================
-
   /**
-   * Envoie le clip au backend pour le sauvegarder
-   * Transforme le brouillon en clip publié
+   * Crée un nouveau clip à partir du brouillon
    */
   const addNewClip = async (clip) => {
     try {
-      // 1. Créer le clip
+      // 1. Créer le clip via la route POST
       const response = await fetch(`${BACK_URL}/clipmanager/clips/new`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -346,19 +353,116 @@ function App() {
   // ============================================
 
   /**
-   * Filtre les clips selon les tags sélectionnés
-   * Si aucun tag sélectionné, affiche tous les clips
-   * Si des tags sont sélectionnés, n'affiche que les clips qui ont TOUS les tags
+   * Filtre les clips selon les tags, les statuts ET les statuts d'édition sélectionnés
+   * - Si aucun tag sélectionné, ignore le filtre par tag
+   * - Si aucun statut sélectionné, ignore le filtre par statut
+   * - Si aucun statut d'édition sélectionné, ignore le filtre par édition
+   * - Si des tags sont sélectionnés, n'affiche que les clips qui ont TOUS les tags
+   * - Si des statuts sont sélectionnés, n'affiche que les clips avec l'un de ces statuts
+   * - Si des statuts d'édition sont sélectionnés, applique la logique appropriée
    */
-  const filteredClips = clips.filter(
-    (clip) =>
+  const filteredClips = clips.filter((clip) => {
+    // Filtre par tags
+    const matchesTags =
       selectedTags.length === 0 ||
-      selectedTags.every((tag) => clip.tags.includes(tag))
-  );
+      selectedTags.every((tag) => clip.tags.includes(tag));
+
+    // Filtre par statuts
+    const matchesStatus =
+      selectedStatuses.length === 0 || selectedStatuses.includes(clip.status);
+
+    // Filtre par statuts d'édition
+    let matchesEditStatus = true;
+    if (selectedEditStatuses.length > 0) {
+      matchesEditStatus = selectedEditStatuses.some((editStatus) => {
+        if (editStatus === "EDITABLE") {
+          return clip.editable === true && !clip.edit_progress;
+        } else if (editStatus === "IN_PROGRESS") {
+          return clip.edit_progress === "IN_PROGRESS";
+        } else if (editStatus === "TERMINATED") {
+          return clip.edit_progress === "TERMINATED";
+        }
+        return false;
+      });
+    }
+
+    // Le clip doit correspondre aux trois filtres
+    return matchesTags && matchesStatus && matchesEditStatus;
+  });
 
   // ============================================
-  // GESTION DE LA DÉCONNEXION
+  // GESTION DES CLIPS ARCHIVÉS
   // ============================================
+
+  /**
+   * Charge les clips archivés depuis le backend
+   */
+  const loadArchivedClips = async () => {
+    try {
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/archives`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: user.token,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Erreur réseau");
+      }
+
+      const data = await response.json();
+
+      if (data.result) {
+        setClips(data.clips);
+        setShowArchived(true);
+        setSelectedClipId(null); // Réinitialise la sélection
+      } else {
+        alert("Erreur lors du chargement des clips archivés");
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des clips archivés :", error);
+      alert("Erreur de connexion au serveur");
+    }
+  };
+
+  /**
+   * Recharge les clips actifs depuis le backend
+   */
+  const loadActiveClips = async () => {
+    try {
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/all`);
+
+      if (!response.ok) {
+        throw new Error("Erreur réseau");
+      }
+
+      const data = await response.json();
+      setClips(data.clips);
+      setShowArchived(false);
+      setSelectedClipId(null); // Réinitialise la sélection
+
+      // EXTRACTION AUTOMATIQUE DES TAGS UNIQUES
+      const uniqueTags = [
+        ...new Set(data.clips.flatMap((clip) => clip.tags || [])),
+      ];
+      setAllTags(uniqueTags);
+    } catch (error) {
+      console.error("Erreur lors du chargement des clips :", error);
+      alert("Erreur de connexion au serveur");
+    }
+  };
+
+  /**
+   * Bascule entre les clips actifs et les archives
+   */
+  const toggleArchiveView = () => {
+    if (showArchived) {
+      loadActiveClips();
+    } else {
+      loadArchivedClips();
+    }
+  };
 
   /**
    * Déconnecte l'utilisateur en vidant les données Redux
@@ -366,7 +470,7 @@ function App() {
   const userLogout = () => {
     if (user.username) {
       dispatch(logout());
-      alert("✅ Déconnexion réussie !");
+      alert("Déconnexion réussie !");
     }
   };
 
@@ -376,7 +480,7 @@ function App() {
 
   /**
    * Met à jour un clip dans la liste après modification
-   * Utilisé notamment après la prise en charge de l'édition
+   * Utilisé notamment après la prise en charge de l'édition ou après un vote
    */
   const handleClipUpdate = (updatedClip) => {
     setClips((prevClips) =>
@@ -429,15 +533,15 @@ function App() {
             );
             // Nettoie l'URL pour enlever le code (sécurité et esthétique)
             window.history.replaceState({}, document.title, "/");
-            alert("✅ Connexion réussie !");
+            alert("Connexion réussie !");
           } else {
             console.error("Erreur d'authentification:", data.error);
-            alert("❌ Échec de la connexion. Réessayez.");
+            alert("Échec de la connexion. Réessayez.");
           }
         })
         .catch((err) => {
           console.error("Erreur de connexion:", err);
-          alert("❌ Erreur de connexion");
+          alert("Erreur de connexion");
         })
         .finally(() => {
           setIsAuthInProgress(false); // Débloque pour une prochaine tentative
@@ -475,10 +579,34 @@ function App() {
 
   /**
    * Charge tous les clips depuis le backend au montage du composant
+   * 1. D'abord lance l'archivage automatique des vieux clips
+   * 2. Ensuite charge tous les clips actifs
    */
   useEffect(() => {
     const fetchClips = async () => {
       try {
+        // 1. ARCHIVAGE AUTOMATIQUE
+        const archiveResponse = await fetch(
+          `${BACK_URL}/clipmanager/clips/archiving`,
+          {
+            method: "PUT",
+          }
+        );
+
+        if (archiveResponse.ok) {
+          const archiveData = await archiveResponse.json();
+
+          // Afficher une alerte si des clips ont été archivés
+          if (archiveData.result && archiveData.details.total > 0) {
+            alert(
+              `${archiveData.details.total} clip(s) ont été automatiquement archivés :\n` +
+                `- ${archiveData.details.published} clip(s) publiés\n` +
+                `- ${archiveData.details.discarded} clip(s) refusés`
+            );
+          }
+        }
+
+        // 2. CHARGEMENT DES CLIPS ACTIFS
         const response = await fetch(`${BACK_URL}/clipmanager/clips/all`);
         if (!response.ok) {
           throw new Error("Erreur réseau");
@@ -486,7 +614,7 @@ function App() {
         const data = await response.json();
         setClips(data.clips);
 
-        // 🆕 EXTRACTION AUTOMATIQUE DES TAGS UNIQUES
+        // EXTRACTION AUTOMATIQUE DES TAGS UNIQUES
         const uniqueTags = [
           ...new Set(data.clips.flatMap((clip) => clip.tags || [])),
         ];
@@ -519,73 +647,107 @@ function App() {
 
         <div className="flex justify-between items-center">
           {user.username ? (
-            <></>
+            <p className="text-white text-sm mr-4 font-medium">
+              Connecté en tant que{" "}
+              <span className="font-semibold">{user.username}</span>
+            </p>
           ) : (
-            <span className="font-bold text-sm text-indigo-800 pr-4 italic">
-              En attente de connexion...
-            </span>
+            <p className="text-white text-sm mr-4 font-medium">Se connecter</p>
           )}
-          <button onClick={() => setShowLoginModal(true)}>
-            <img
-              src={user?.avatar_url || default_user}
-              alt={user?.username || "Se connecter"}
-              className="w-8 h-8 rounded-full border border-white hover:ring-2 ring-indigo-400"
-            />
-          </button>
+          <img
+            src={user.avatar_url || default_user}
+            alt="Avatar"
+            onClick={() => setShowLoginModal(true)}
+            className="w-10 h-10 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+            title={
+              user.username
+                ? `Connecté en tant que ${user.username}`
+                : "Se connecter"
+            }
+          />
         </div>
       </header>
 
       {/* ============================================
-          LAYOUT PRINCIPAL : 3 colonnes
+          CONTENU PRINCIPAL : 3 colonnes
           ============================================ */}
-      <div className="flex flex-1 h-0">
+      <div className="flex-1 flex overflow-hidden">
         {/* ============================================
-            COLONNE GAUCHE : Liste des clips + bouton proposer
+            COLONNE GAUCHE : Liste des clips
             ============================================ */}
-        <aside className="w-1/4 max-w-sm bg-gray-700 border-r border-gray-300 flex flex-col">
+        <aside className="w-80 bg-gray-800 flex flex-col overflow-hidden">
+          {/* Barre d'actions : Proposer et Filtrer */}
+          <div className="p-2 flex flex-col gap-2 bg-gray-800 border-b">
+            <div className="flex gap-2">
+              <button
+                onClick={handleProposeClick}
+                disabled={!user.username}
+                className={`flex-1 px-3 py-2 rounded font-medium ${
+                  user.username
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                    : "bg-gray-500 text-gray-300 cursor-not-allowed"
+                }`}
+                title={
+                  user.username
+                    ? "Proposer un nouveau clip"
+                    : "Connecte-toi pour proposer un clip"
+                }
+              >
+                📝 Proposer un clip
+              </button>
+
+              <button
+                onClick={() => setShowFilterModal(true)}
+                className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium"
+              >
+                🔎 Filtrer
+              </button>
+            </div>
+          </div>
+
+          {/* Liste des clips filtrés */}
           {!user.username ? (
-            <div></div>
+            <div className="flex-1 overflow-y-auto"></div>
           ) : (
-            <>
-              {/* En-tête de la liste avec bouton filtrer */}
-              <div className="p-4 border-b font-bold text-lg flex text-gray-50 justify-between items-center">
-                <span>Liste des clips</span>
-                <button
-                  onClick={() => setShowFilterModal(true)}
-                  className="text-sm text-indigo-400 hover:text-indigo-500"
-                >
-                  🏷️ Filtrer
-                </button>
-              </div>
-
-              {/* Liste scrollable des clips filtrés */}
-              <div className="flex-1 overflow-y-auto">
-                <ClipList
-                  clips={filteredClips}
-                  onSelect={handleSelectClip}
-                  selectedClipId={selectedClipId}
-                  users={users}
-                  expertVotes={expertVotes}
-                />
-              </div>
-
-              {/* Bouton "Proposer un clip" fixé en bas */}
-              <div className="p-4 border-t">
-                <button
-                  onClick={handleProposeClick}
-                  className="w-full px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
-                >
-                  📩 Proposer un clip
-                </button>
-              </div>
-            </>
+            <div className="flex-1 overflow-y-auto">
+              <ClipList
+                clips={filteredClips}
+                onSelect={handleSelectClip}
+                selectedClipId={selectedClipId}
+                users={users}
+              />
+            </div>
           )}
+
+          {/* Bouton pour basculer entre clips actifs et archives */}
+          <div className="p-2 bg-gray-800 border-t">
+            <button
+              onClick={toggleArchiveView}
+              disabled={!user.username}
+              className={`w-full px-3 py-2 rounded font-medium ${
+                user.username
+                  ? showArchived
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-gray-600 text-white hover:bg-gray-700"
+                  : "bg-gray-500 text-gray-300 cursor-not-allowed"
+              }`}
+              title={
+                user.username
+                  ? showArchived
+                    ? "Retour aux clips actifs"
+                    : "Voir les archives"
+                  : "Connecte-toi pour voir les archives"
+              }
+            >
+              {showArchived ? "📂 Clips actifs" : "📦 Archives"}
+            </button>
+          </div>
         </aside>
 
         {/* ============================================
-            COLONNE CENTRALE : Formulaire ou Viewer
+            COLONNE CENTRALE : Viewer ou Form
             ============================================ */}
-        <main className="flex-1 bg-gray-800 h-full p-6">
+        <main className="flex-1 bg-gray-700 p-4 overflow-auto">
           {!user.username ? (
             <div></div>
           ) : (
@@ -610,10 +772,6 @@ function App() {
                     clip={selectedClip}
                     users={users}
                     user={user}
-                    expertVotes={expertVotes[selectedClipId] || {}}
-                    onExpertVote={(pseudo, vote) =>
-                      handleExpertVote(selectedClipId, pseudo, vote)
-                    }
                     onModifyClip={handleModifyClip}
                     onDeleteClip={handleDeleteClip}
                     onClipUpdate={handleClipUpdate}
@@ -627,7 +785,7 @@ function App() {
         {/* ============================================
             COLONNE DROITE : Image et lien Twitch du clip
             ============================================ */}
-        <div className="w-[700px] bg-gray-800 p-4 flex flex-col items-end gap-4">
+        <div className="w-[700px] bg-gray-700 p-4 flex flex-col items-end gap-4">
           {!user.username ? (
             <div></div>
           ) : (
@@ -642,16 +800,16 @@ function App() {
                         : "offline-screen_socials.png"
                     }
                     alt="Illustration du clip"
-                    className="w-full rounded shadow object-cover"
+                    className="w-full h-auto rounded-lg shadow-lg"
                   />
 
-                  {/* Bouton pour ouvrir le clip sur Twitch */}
+                  {/* Lien vers le clip Twitch */}
                   {selectedClip.link && (
                     <a
                       href={selectedClip.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 text-center w-36"
+                      className="text-sm px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
                     >
                       🎥 Voir sur Twitch
                     </a>
@@ -667,12 +825,16 @@ function App() {
           MODALES : Affichées conditionnellement
           ============================================ */}
 
-      {/* Modale de filtrage par tags */}
+      {/* Modale de filtrage par tags, statuts et édition */}
       {showFilterModal && (
-        <TagFilterModal
+        <FilterModal
           allTags={allTags}
           selectedTags={selectedTags}
-          toggleTag={toggleTag}
+          selectedStatuses={selectedStatuses}
+          selectedEditStatuses={selectedEditStatuses}
+          onToggleTag={toggleTag}
+          onToggleStatus={toggleStatus}
+          onToggleEditStatus={toggleEditStatus}
           onClose={() => setShowFilterModal(false)}
         />
       )}
@@ -680,10 +842,8 @@ function App() {
       {/* Modale de connexion/déconnexion */}
       {showLoginModal && (
         <LoginModal
-          user={user.username}
           onClose={() => setShowLoginModal(false)}
           onLogout={userLogout}
-          isAuthInProgress={isAuthInProgress}
         />
       )}
     </div>

@@ -13,24 +13,20 @@ import default_user from "./images/default_user.png";
  * @param {Object} clip - Le clip à afficher avec toutes ses données
  * @param {Array} users - Liste complète des utilisateurs
  * @param {Object} user - Utilisateur connecté avec token
- * @param {Object} expertVotes - Votes des experts pour ce clip { username: "oui"/"non"/"à revoir" }
- * @param {Function} onExpertVote - Callback pour enregistrer un vote
- * @param {Function} onEditClip - Callback pour passer en mode édition
+ * @param {Function} onModifyClip - Callback pour passer en mode édition
  * @param {Function} onDeleteClip - Callback pour supprimer le clip
- * @param {Function} onClipUpdate - Callback pour pour mettre à jour le clip dans App.js
+ * @param {Function} onClipUpdate - Callback pour mettre à jour le clip dans App.js
  */
-
 export default function ClipViewer({
   clip,
   users = [],
   user,
-  expertVotes = {},
-  onExpertVote,
   onModifyClip,
   onDeleteClip,
   onClipUpdate,
 }) {
   const BACK_URL = process.env.REACT_APP_BACK_URL;
+
   // ============================================
   // ÉTATS LOCAUX DU COMPOSANT
   // ============================================
@@ -47,21 +43,17 @@ export default function ClipViewer({
   // Affichage de la modale de prise en charge de l'édition
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Pseudo de l'expert qui est en train de voter (pour passer à la modale)
-  const [votingExpertPseudo, setVotingExpertPseudo] = useState(null);
-
-  // État non utilisé actuellement (pourrait servir pour un futur feature)
-  const [editClicked, setEditClicked] = useState(false);
-
   // ============================================
-  // FILTRAGE DES EXPERTS
+  // FILTRAGE DES UTILISATEURS
   // ============================================
 
   /**
-   * Extrait uniquement les utilisateurs ayant le rôle EXPERT
-   * Ces experts peuvent voter sur les clips
+   * Sépare les utilisateurs par rôle
+   * EXPERTS : affichés en premier
+   * USERS : affichés ensuite
    */
   const experts = users.filter((u) => u.role === "EXPERT");
+  const regularUsers = users.filter((u) => u.role === "USER");
 
   // ============================================
   // GESTION DES COMMENTAIRES
@@ -107,15 +99,15 @@ export default function ClipViewer({
   // ============================================
 
   /**
-   * Enregistre le vote d'un expert et ferme la modale
+   * Gère la mise à jour du clip après un vote réussi
+   * Convertit les votes du backend vers le format attendu par l'interface
    *
-   * @param {string} pseudo - Le pseudo de l'expert qui vote
-   * @param {string} vote - Le vote: "oui", "non" ou "à revoir"
+   * @param {Object} updatedClip - Le clip mis à jour renvoyé par le backend
    */
-  const handleVote = (pseudo, vote) => {
-    onExpertVote?.(pseudo, vote); // Appelle le callback parent (? = optional chaining)
-    setShowVoteModal(false); // Ferme la modale
-    setVotingExpertPseudo(null); // Réinitialise l'expert en cours de vote
+  const handleVoteSuccess = (updatedClip) => {
+    // Met à jour le clip dans App.js
+    onClipUpdate?.(updatedClip);
+    setShowVoteModal(false);
   };
 
   // ============================================
@@ -125,22 +117,23 @@ export default function ClipViewer({
   /**
    * Détermine la classe CSS du ring coloré autour de l'avatar selon le vote
    *
-   * @param {string} vote - Le vote de l'expert
+   * @param {string} vote - Le vote de l'expert: "OK", "KO", "toReview" ou undefined
    * @returns {string} - Classes Tailwind pour le ring coloré
    */
   const borderColor = (vote) => {
-    return vote === "oui"
+    return vote === "OK"
       ? "ring-4 ring-green-500" // Vote positif = vert
-      : vote === "non"
+      : vote === "KO"
         ? "ring-4 ring-red-600" // Vote négatif = rouge
-        : vote === "à revoir"
-          ? "ring-4 ring-amber-400" // À revoir = ambre
-          : "ring-transparent"; // Pas encore voté = transparent
+        : vote === "toReview"
+          ? "ring-4 ring-orange-500" // À revoir = orange
+          : "ring-4 ring-gray-500"; // Pas encore voté = gris
   };
 
   // ============================================
   // GESTION DE L'EDITION D'UN CLIP À EDITER
   // ============================================
+
   const handleEditStart = async () => {
     try {
       const response = await fetch(`${BACK_URL}/clipmanager/clips/editstart`, {
@@ -199,6 +192,39 @@ export default function ClipViewer({
   };
 
   // ============================================
+  // GESTION DE LA PUBLICATION DU CLIP
+  // ============================================
+
+  const handlePublished = async () => {
+    try {
+      const response = await fetch(`${BACK_URL}/clipmanager/clips/published`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: user.token,
+          clipId: clip.clip_id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        // Mettre à jour le clip dans App.js
+        if (onClipUpdate) {
+          onClipUpdate(data.clip);
+        }
+        alert("✅ Clip marqué comme publié sur TikTok !");
+      } else {
+        console.error("Erreur lors de la publication:", data.error);
+        alert(`Erreur: ${data.error}`);
+      }
+    } catch (error) {
+      console.error("Erreur réseau:", error);
+      alert("Erreur lors de la communication avec le serveur");
+    }
+  };
+
+  // ============================================
   // RENDU DU COMPOSANT
   // ============================================
 
@@ -220,7 +246,7 @@ export default function ClipViewer({
         </p>
 
         {/* Tags du clip */}
-        <div className="flex flex-wrap mb-8 gap-2 my-2">
+        <div className="flex flex-wrap mb-4 gap-2 my-2">
           {clip.tags.map((tag) => (
             <span
               key={tag}
@@ -230,6 +256,40 @@ export default function ClipViewer({
             </span>
           ))}
         </div>
+
+        {/* Affichage du statut si différent de PROPOSED avec bouton publication */}
+        {clip.status && clip.status !== "PROPOSED" && (
+          <div className="mb-6 flex items-center gap-3">
+            <span
+              className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                clip.status === "READY"
+                  ? "bg-green-600 text-white"
+                  : clip.status === "DISCARDED"
+                    ? "bg-red-600 text-white"
+                    : clip.status === "PUBLISHED"
+                      ? "bg-blue-600 text-white"
+                      : clip.status === "ARCHIVED"
+                        ? "bg-gray-600 text-white"
+                        : "bg-yellow-600 text-white"
+              }`}
+            >
+              Statut : {clip.status}
+            </span>
+
+            {/* Bouton de publication si statut READY */}
+            {clip.status === "READY" && (
+              <>
+                <div>🔜</div>
+                <button
+                  onClick={handlePublished}
+                  className="text-sm px-3 py-1 border-2 border-green-600 text-white bg-transparent rounded font-medium hover:bg-green-600 active:bg-green-700 transition-colors"
+                >
+                  📤 Clip publié sur TikTok
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* ============================================
             BARRE D'ACTIONS : 3 colonnes
@@ -242,7 +302,7 @@ export default function ClipViewer({
               disabled={user.username !== clip.authorId.username}
               className={`text-sm px-3 py-1 text-white rounded font-medium ${
                 user.username === clip.authorId.username
-                  ? "bg-gray-600 hover:bg-gray-700 cursor-pointer "
+                  ? "bg-gray-500 hover:bg-gray-500 cursor-pointer "
                   : "bg-gray-600 cursor-not-allowed opacity-75"
               }`}
               title={
@@ -264,7 +324,7 @@ export default function ClipViewer({
               }`}
               title={
                 user.username === clip.authorId.username
-                  ? "Clique pour supprimer ce clip proposé"
+                  ? "Clique pour supprimer cette proposition"
                   : "Seul l'auteur de la proposition peut la supprimer"
               }
             >
@@ -272,15 +332,14 @@ export default function ClipViewer({
             </button>
           </div>
 
-          {/* COLONNE 2 : Indicateur "À éditer" (si applicable) */}
-          <div className="flex justify-center">
+          {/* COLONNE 2 : Statut d'édition */}
+          <div className="flex justify-center items-center gap-2">
             {clip.editable && !clip.edit_progress && (
               <button
                 onClick={() => setShowEditModal(true)}
-                className="text-sm px-3 py-1 bg-amber-600 rounded hover:bg-amber-700 font-medium"
-                title="Clique pour prendre en charge l'édition de ce clip"
+                className="text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600 font-medium"
               >
-                À éditer
+                À éditer → Prendre en charge l'édition
               </button>
             )}
 
@@ -288,9 +347,9 @@ export default function ClipViewer({
               <button
                 onClick={handleEditEnd}
                 disabled={user.username !== clip.editorId.username}
-                className={`text-sm px-3 py-1 rounded font-medium ${
+                className={`text-sm px-3 py-1 text-white rounded font-medium ${
                   user.username === clip.editorId.username
-                    ? "bg-yellow-600 hover:bg-yellow-700 cursor-pointer "
+                    ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer "
                     : "bg-yellow-600 cursor-not-allowed opacity-75"
                 }`}
                 title={
@@ -304,7 +363,7 @@ export default function ClipViewer({
             )}
 
             {clip.edit_progress === "TERMINATED" && clip.editorId && (
-              <div className="text-sm px-3 py-1 bg-green-600 rounded font-medium flex items-center gap-2">
+              <div className="text-sm px-3 py-1 bg-lime-600 rounded font-medium flex items-center gap-2">
                 <span>Édition terminée par {clip.editorId.username}</span>
               </div>
             )}
@@ -318,33 +377,60 @@ export default function ClipViewer({
             )}
           </div>
 
-          {/* COLONNE 3 : Bouton Voter et avatars des experts */}
+          {/* COLONNE 3 : Bouton Voter et avatars de tous les utilisateurs */}
           <div className="flex justify-end items-center gap-3 h-full">
             <button
-              onClick={() => {
-                // TODO: À adapter pour récupérer le vrai utilisateur connecté
-                setVotingExpertPseudo("Boubou"); // Hardcodé pour l'instant
-                setShowVoteModal(true);
-              }}
+              onClick={() => setShowVoteModal(true)}
               className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
             >
               Voter
             </button>
 
-            {/* Avatars des experts avec indicateur de vote */}
-            <div className="flex gap-2">
-              {experts.map((user) => {
-                const vote = expertVotes[user.username];
-                return (
-                  <img
-                    key={user.username}
-                    src={user.avatar_url || default_user}
-                    alt={user.username}
-                    title={user.username}
-                    className={`w-14 h-14 rounded-full ring-2 ${borderColor(vote)}`}
-                  />
-                );
-              })}
+            {/* Section des votes */}
+            <div className="flex flex-col gap-3 mb-2 ">
+              {/* Avatars des EXPERTS avec indicateur de vote */}
+              <div className="flex gap-3">
+                {experts.map((expert) => {
+                  // Trouve le vote de cet expert dans clip.votes
+                  const expertVote = clip.votes?.find(
+                    (v) => v.userName === expert.username
+                  );
+                  const vote = expertVote?.result;
+
+                  return (
+                    <img
+                      key={expert.username}
+                      src={expert.avatar_url || default_user}
+                      alt={expert.username}
+                      title={`${expert.username} (EXPERT)`}
+                      className={`w-14 h-14 rounded-full ring-2 ${borderColor(vote)}`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Avatars des USERS avec indicateur de vote */}
+              {regularUsers.length > 0 && (
+                <div className="flex gap-2">
+                  {regularUsers.map((regularUser) => {
+                    // Trouve le vote de cet utilisateur dans clip.votes
+                    const userVote = clip.votes?.find(
+                      (v) => v.userName === regularUser.username
+                    );
+                    const vote = userVote?.result;
+
+                    return (
+                      <img
+                        key={regularUser.username}
+                        src={regularUser.avatar_url || default_user}
+                        alt={regularUser.username}
+                        title={`${regularUser.username} (USER)`}
+                        className={`w-10 h-10 rounded-full ring-2 ${borderColor(vote)}`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -384,7 +470,7 @@ export default function ClipViewer({
         </div>
 
         {/* Champ d'ajout de commentaire */}
-        <div className="mt-4 flex gap-2 px-2">
+        <div className="mt-4 flex gap-2">
           <input
             type="text"
             value={commentInput}
@@ -402,7 +488,7 @@ export default function ClipViewer({
 
           <button
             onClick={addComment}
-            className="px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600"
+            className="px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium"
           >
             Envoyer
           </button>
@@ -414,18 +500,12 @@ export default function ClipViewer({
           ============================================ */}
 
       {/* Modale de vote pour les experts */}
-      {showVoteModal && votingExpertPseudo && (
+      {showVoteModal && (
         <ExpertVoteModale
-          user={
-            users.find((u) => u.pseudo === votingExpertPseudo) || {
-              pseudo: votingExpertPseudo,
-            }
-          }
-          onClose={() => {
-            setShowVoteModal(false);
-            setVotingExpertPseudo(null);
-          }}
-          onVote={(vote) => handleVote(votingExpertPseudo, vote)}
+          user={user}
+          clip={clip}
+          onVote={handleVoteSuccess}
+          onClose={() => setShowVoteModal(false)}
         />
       )}
 

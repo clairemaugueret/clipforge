@@ -291,6 +291,7 @@ async function clipPublished(req, res) {
 
 // CONTROLLER - Ajouter un vote à un clip et mise à jour du statut, si appicable (selon conditions)
 async function addVoteToClip(req, res) {
+  // Validation des champs requis
   if (!checkBody(req.body, ["clipId", "vote"])) {
     return res
       .status(400)
@@ -299,11 +300,21 @@ async function addVoteToClip(req, res) {
 
   const { clipId, vote } = req.body;
 
+  // Validation du format du vote
+  const validVotes = ["OK", "KO", "toReview"];
+  if (!validVotes.includes(vote)) {
+    return res.status(400).json({
+      result: false,
+      error: "Invalid vote value. Must be OK, KO, or toReview",
+    });
+  }
+
   try {
+    // Vérifier que le clip existe
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
-    // Sécurise le parsing des votes
+    // Sécurise le parsing des votes existants
     let updatedVotes = [];
 
     if (typeof clip.votes === "string") {
@@ -322,7 +333,7 @@ async function addVoteToClip(req, res) {
       updatedVotes = [];
     }
 
-    // Vérifie si l’utilisateur a déjà voté
+    // Vérifie si l'utilisateur a déjà voté
     const existingVoteIndex = updatedVotes.findIndex(
       (v) => v.userId === req.user.twitch_id
     );
@@ -331,16 +342,17 @@ async function addVoteToClip(req, res) {
       // Met à jour le vote existant
       updatedVotes[existingVoteIndex].result = vote;
     } else {
-      // Ajoute un nouveau vote
+      // Ajoute un nouveau vote avec le rôle de l'utilisateur
       updatedVotes.push({
         userId: req.user.twitch_id,
         userName: req.user.username,
         userAvatar: req.user.avatar_url,
+        userRole: req.user.role, // 🆕 Ajout du rôle (EXPERT ou USER)
         result: vote,
       });
     }
 
-    // Vérifie si tous les experts ont voté
+    // Vérifie si tous les experts ont voté (seuls les votes des EXPERT comptent pour le statut)
     const experts = await User.findAll({ where: { role: "EXPERT" } });
     const expertIds = experts.map((u) => u.twitch_id);
 
@@ -352,28 +364,40 @@ async function addVoteToClip(req, res) {
       votedExpertIds.includes(id)
     );
 
-    // Toujours recalculer le statut
+    // Recalcule le statut du clip selon les règles métier (UNIQUEMENT basé sur les votes des EXPERTS)
     if (allExpertsVoted) {
-      const okVotes = updatedVotes.filter((v) => v.result === "OK").length;
-      const koVotes = updatedVotes.filter((v) => v.result === "KO").length;
+      // Filtre uniquement les votes des experts
+      const expertVotes = updatedVotes.filter((v) =>
+        expertIds.includes(v.userId)
+      );
 
+      const okVotes = expertVotes.filter((v) => v.result === "OK").length;
+      const koVotes = expertVotes.filter((v) => v.result === "KO").length;
+
+      // Règle 1 : Si tous les experts votent OK ET le clip n'est pas éditable -> READY
       if (okVotes === expertIds.length && !clip.editable) {
         clip.status = "READY";
-      } else if (koVotes >= 2) {
+      }
+      // Règle 2 : Si 2 experts ou plus votent KO -> DISCARDED
+      else if (koVotes >= 2) {
         clip.status = "DISCARDED";
-      } else {
+      }
+      // Règle 3 : Sinon reste PROPOSED
+      else {
         clip.status = "PROPOSED";
       }
     } else {
-      clip.status = "PROPOSED"; // Si tous les experts n'ont pas voté
+      // Si tous les experts n'ont pas encore voté -> PROPOSED
+      clip.status = "PROPOSED";
     }
 
+    // Met à jour le clip avec les nouveaux votes et le statut
     await clip.update({
       votes: updatedVotes,
       status: clip.status,
     });
 
-    // Peupler avant d’envoyer
+    // Peupler les données avant d'envoyer (pour inclure les infos complètes des users)
     await populateClipData(clip);
 
     res.status(200).json({
@@ -390,21 +414,47 @@ async function addVoteToClip(req, res) {
 // CONTROLLER - Archiver les clips publiés il y a plus de 2 semaines
 async function archiveOldClips(req, res) {
   try {
-    const period = dayjs().subtract(14, "day").toDate(); // modifier ici le nombre de jours si on veut modifier la période avant l'archivage
+    const twoWeeksAgo = dayjs().subtract(14, "day").toDate();
 
-    // Mettre à jour les clips trop anciens
-    const result = await Clip.updateMany(
-      { status: "PUBLISHED", published_at: { $lt: period } },
-      { $set: { status: "ARCHIVED" } }
+    // Archiver les clips PUBLISHED depuis plus de 2 semaines (basé sur published_at)
+    const publishedResult = await Clip.update(
+      { status: "ARCHIVED" },
+      {
+        where: {
+          status: "PUBLISHED",
+          published_at: { [Op.lt]: twoWeeksAgo },
+        },
+      }
     );
+
+    // Archiver les clips DISCARDED créés il y a plus de 2 semaines (basé sur createdAt)
+    const discardedResult = await Clip.update(
+      { status: "ARCHIVED" },
+      {
+        where: {
+          status: "DISCARDED",
+          createdAt: { [Op.lt]: twoWeeksAgo },
+        },
+      }
+    );
+
+    const totalArchived = publishedResult[0] + discardedResult[0];
 
     res.status(200).json({
       result: true,
-      message: `${result.modifiedCount} clip(s) archived`,
+      message: `${totalArchived} clip(s) archived (${publishedResult[0]} published, ${discardedResult[0]} discarded)`,
+      details: {
+        published: publishedResult[0],
+        discarded: discardedResult[0],
+        total: totalArchived,
+      },
     });
   } catch (error) {
     console.error("Error archiving clips:", error);
-    res.status(500).json({ error: "Server error while archiving clips" });
+    res.status(500).json({
+      result: false,
+      error: "Server error while archiving clips",
+    });
   }
 }
 
