@@ -885,7 +885,7 @@ function App() {
 
                   {/* Lien vers Twitch (on le garde au cas où) */}
                   {selectedClip.link && (
-                    <>
+                    <div className="flex flex-row gap-3">
                       <a
                         href={selectedClip.link}
                         target="_blank"
@@ -901,11 +901,11 @@ function App() {
                             selectedClip.subject
                           )
                         }
-                        className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                        className="text-sm px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 font-medium"
                       >
                         📥 Télécharger
                       </button>
-                    </>
+                    </div>
                   )}
                 </>
               )}

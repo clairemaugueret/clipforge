@@ -505,32 +505,72 @@ async function getClipDownloadUrl(req, res) {
       .json({ result: false, error: "Missing clipId parameter" });
   }
 
-  // Utilise le token Twitch de l'utilisateur
-  const userTwitchToken = req.user.twitch_access_token;
+  try {
+    // 1. Récupérer les infos du clip depuis l'API Twitch pour obtenir broadcaster_id
+    const clipDataResult = await fetchTwitchClipData(clipId, req.token);
 
-  if (!userTwitchToken) {
-    return res
-      .status(401)
-      .json({ result: false, error: "User not authenticated with Twitch" });
-  }
+    if (!clipDataResult.success) {
+      return res.status(clipDataResult.status).json({
+        result: false,
+        error: clipDataResult.error,
+      });
+    }
 
-  const result = await fetchTwitchClipDownloadUrl(clipId, userTwitchToken);
+    const broadcasterId = clipDataResult.clip.broadcaster_id;
 
-  if (!result.success) {
-    // Log pour debug
-    console.error("Download failed:", result.error);
+    // 2. Récupérer l'editor_id depuis la DB (utilisateur "Boubou_")
+    const editorUser = await User.findOne({
+      where: { username: "Boubou_" },
+    });
 
-    return res.status(result.status).json({
+    if (!editorUser) {
+      return res.status(404).json({
+        result: false,
+        error: "Editor user 'Boubou_' not found in database",
+      });
+    }
+
+    const editorId = editorUser.twitch_id;
+
+    // 3. Vérifier que l'utilisateur a un token Twitch valide
+    const userTwitchToken = req.user.twitch_access_token;
+
+    if (!userTwitchToken) {
+      return res.status(401).json({
+        result: false,
+        error: "User not authenticated with Twitch",
+      });
+    }
+
+    // 4. Appeler l'API Twitch pour obtenir l'URL de téléchargement
+    const result = await fetchTwitchClipDownloadUrl(
+      clipId,
+      broadcasterId,
+      editorId,
+      userTwitchToken
+    );
+
+    if (!result.success) {
+      console.error("Download failed:", result.error);
+
+      return res.status(result.status).json({
+        result: false,
+        error: result.error?.message || "Failed to get download URL",
+      });
+    }
+
+    return res.status(200).json({
+      result: true,
+      downloadUrl: result.downloadData.url,
+      expiresAt: result.downloadData.expires_at,
+    });
+  } catch (err) {
+    console.error("Error getting clip download URL:", err);
+    return res.status(500).json({
       result: false,
-      error: result.error?.message || "Failed to get download URL",
+      error: "Server error while getting download URL",
     });
   }
-
-  return res.status(200).json({
-    result: true,
-    downloadUrl: result.downloadData.url,
-    expiresAt: result.downloadData.expires_at,
-  });
 }
 
 module.exports = {

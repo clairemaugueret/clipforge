@@ -40,17 +40,25 @@ async function fetchTwitchClipData(clipId, appToken) {
   }
 }
 
-async function fetchTwitchClipDownloadUrl(clipId, userAccessToken) {
+async function fetchTwitchClipDownloadUrl(
+  clipId,
+  broadcasterId,
+  editorId,
+  userAccessToken
+) {
   try {
-    const response = await fetch(
-      `https://api.twitch.tv/helix/clips/download?id=${clipId}`,
-      {
-        headers: {
-          "Client-ID": process.env.TWITCH_CLIENT_ID,
-          Authorization: `Bearer ${userAccessToken}`,
-        },
-      }
-    );
+    // Construire l'URL avec tous les paramètres obligatoires
+    const url = new URL("https://api.twitch.tv/helix/clips/download");
+    url.searchParams.append("clip_id", clipId);
+    url.searchParams.append("broadcaster_id", broadcasterId);
+    url.searchParams.append("editor_id", editorId);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Client-ID": process.env.TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${userAccessToken}`,
+      },
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
