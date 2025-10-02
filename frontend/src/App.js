@@ -633,6 +633,28 @@ function App() {
   }, []);
 
   // ============================================
+  // HELPER POUR PLAYER TWITCH
+  // ============================================
+
+  // Construit l'URL d'embed Twitch avec le paramètre ?parent= requis
+  const getTwitchEmbedSrc = (embedUrl) => {
+    if (!embedUrl) return null;
+    const parent = window.location.hostname; // ex: "localhost"
+    try {
+      const url = new URL(embedUrl);
+      const parents = url.searchParams.getAll("parent");
+      if (!parents.includes(parent)) {
+        url.searchParams.append("parent", parent);
+      }
+      return url.toString();
+    } catch {
+      // Fallback si embedUrl n'est pas parfaitement formée
+      const sep = embedUrl.includes("?") ? "&" : "?";
+      return `${embedUrl}${sep}parent=${parent}`;
+    }
+  };
+
+  // ============================================
   // RENDU DU COMPOSANT
   // ============================================
 
@@ -803,18 +825,31 @@ function App() {
             <>
               {selectedClip && (
                 <>
-                  {/* Image d'illustration du clip (ou bannière par défaut) */}
-                  <img
-                    src={
-                      selectedClip.image?.trim()
-                        ? selectedClip.image
-                        : "offline-screen_socials.png"
-                    }
-                    alt="Illustration du clip"
-                    className="w-full h-auto rounded-lg shadow-lg"
-                  />
+                  {/* Vidéo Twitch si embed_url existe, sinon image */}
+                  {selectedClip.embed_url ? (
+                    <div className="w-full aspect-video rounded-lg shadow-lg overflow-hidden">
+                      <iframe
+                        src={getTwitchEmbedSrc(selectedClip.embed_url)}
+                        title="Twitch clip"
+                        allowFullScreen
+                        frameBorder="0"
+                        scrolling="no"
+                        className="w-full h-full"
+                      />
+                    </div>
+                  ) : (
+                    <img // Sinon image d'illustration du clip (ou bannière par défaut)
+                      src={
+                        selectedClip.image?.trim()
+                          ? selectedClip.image
+                          : "offline-screen_socials.png"
+                      }
+                      alt="Illustration du clip"
+                      className="w-full h-auto rounded-lg shadow-lg"
+                    />
+                  )}
 
-                  {/* Lien vers le clip Twitch */}
+                  {/* Lien vers Twitch (on le garde au cas où) */}
                   {selectedClip.link && (
                     <a
                       href={selectedClip.link}
