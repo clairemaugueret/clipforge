@@ -3,116 +3,28 @@ const User = require("../models/User");
 
 // FONCTION UTILITAIRE - Charger les relations auteur/éditeur et parser JSON
 async function populateClipData(clipOrClips) {
-  // Si un seul clip
-  if (clipOrClips instanceof Clip) {
-    // Parse tags seulement si c'est une string
-    if (typeof clipOrClips.tags === "string") {
+  const parseJsonField = (field) => {
+    // Gérer null, undefined, ou chaîne vide
+    if (!field || field === "") return [];
+
+    if (typeof field === "string") {
       try {
-        clipOrClips.tags = JSON.parse(clipOrClips.tags);
-        if (!Array.isArray(clipOrClips.tags)) {
-          clipOrClips.tags = [];
-        }
+        const parsed = JSON.parse(field);
+        return Array.isArray(parsed) ? parsed : [];
       } catch (err) {
-        console.error("Invalid JSON in clip.tags:", err);
-        clipOrClips.tags = [];
+        console.error("Invalid JSON:", err);
+        return [];
       }
     }
 
-    // Parse comments seulement si c'est une string
-    if (typeof clipOrClips.comments === "string") {
-      try {
-        clipOrClips.comments = JSON.parse(clipOrClips.comments);
-        if (!Array.isArray(clipOrClips.comments)) {
-          clipOrClips.comments = [];
-        }
-      } catch (err) {
-        console.error("Invalid JSON in clip.comments:", err);
-        clipOrClips.comments = [];
-      }
-    }
+    return Array.isArray(field) ? field : [];
+  };
 
-    // Parse votes seulement si c'est une string
-    if (typeof clipOrClips.votes === "string") {
-      try {
-        clipOrClips.votes = JSON.parse(clipOrClips.votes);
-        if (!Array.isArray(clipOrClips.votes)) {
-          clipOrClips.votes = [];
-        }
-      } catch (err) {
-        console.error("Invalid JSON in clip.votes:", err);
-        clipOrClips.votes = [];
-      }
-    }
-
-    // Charger auteur
-    if (typeof clipOrClips.authorId === "string") {
-      clipOrClips.authorId = await User.findByPk(clipOrClips.authorId, {
-        attributes: [
-          "twitch_id",
-          "username",
-          "avatar_url",
-          "whitelist",
-          "role",
-        ],
-      });
-    }
-
-    // Charger éditeur
-    if (clipOrClips.editorId && typeof clipOrClips.editorId === "string") {
-      clipOrClips.editorId = await User.findByPk(clipOrClips.editorId, {
-        attributes: [
-          "twitch_id",
-          "username",
-          "avatar_url",
-          "whitelist",
-          "role",
-        ],
-      });
-    }
-
-    return clipOrClips;
-  }
-
-  // Si tableau de clips
-  for (const clip of clipOrClips) {
-    // Parse tags seulement si c'est une string
-    if (typeof clip.tags === "string") {
-      try {
-        clip.tags = JSON.parse(clip.tags);
-        if (!Array.isArray(clip.tags)) {
-          clip.tags = [];
-        }
-      } catch (err) {
-        console.error("Invalid JSON in clip.tags:", err);
-        clip.tags = [];
-      }
-    }
-
-    // Parse comments seulement si c'est une string
-    if (typeof clip.comments === "string") {
-      try {
-        clip.comments = JSON.parse(clip.comments);
-        if (!Array.isArray(clip.comments)) {
-          clip.comments = [];
-        }
-      } catch (err) {
-        console.error("Invalid JSON in clip.comments:", err);
-        clip.comments = [];
-      }
-    }
-
-    // Parse votes seulement si c'est une string
-    if (typeof clip.votes === "string") {
-      try {
-        clip.votes = JSON.parse(clip.votes);
-        if (!Array.isArray(clip.votes)) {
-          clip.votes = [];
-        }
-      } catch (err) {
-        console.error("Invalid JSON in clip.votes:", err);
-        clip.votes = [];
-      }
-    }
+  const processClip = async (clip) => {
+    // Parse les champs JSON
+    clip.tags = parseJsonField(clip.tags);
+    clip.comments = parseJsonField(clip.comments);
+    clip.votes = parseJsonField(clip.votes);
 
     // Charger auteur
     if (typeof clip.authorId === "string") {
@@ -139,6 +51,17 @@ async function populateClipData(clipOrClips) {
         ],
       });
     }
+  };
+
+  // Si un seul clip
+  if (clipOrClips instanceof Clip) {
+    await processClip(clipOrClips);
+    return clipOrClips;
+  }
+
+  // Si tableau de clips
+  for (const clip of clipOrClips) {
+    await processClip(clip);
   }
 
   return clipOrClips;

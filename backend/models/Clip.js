@@ -9,7 +9,11 @@ Clip.init(
     embed_url: DataTypes.STRING,
     image: DataTypes.STRING,
     subject: DataTypes.STRING,
-    tags: { type: DataTypes.JSON, defaultValue: [] },
+    tags: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: [],
+    },
     createdAt: {
       type: DataTypes.DATE,
       field: "created_at",
@@ -51,12 +55,18 @@ Clip.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
-
-    // Nouveau : tableau d'objets comment { userId, userName, userAvatar, text, created_at, views: [twitch_id] }
-    comments: { type: DataTypes.JSON, defaultValue: [] },
-
-    // Nouveau : tableau d'objets vote { userId, userName, userAvatar, result }
-    votes: { type: DataTypes.JSON, defaultValue: [] },
+    // tableau d'objets comment { userId, userName, userAvatar, text, created_at, views: [twitch_id] }
+    comments: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: [],
+    },
+    // tableau d'objets vote { userId, userName, userAvatar, result }
+    votes: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: [],
+    },
   },
   {
     sequelize,
