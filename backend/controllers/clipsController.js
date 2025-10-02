@@ -2,7 +2,10 @@ const Clip = require("../models/Clip");
 const User = require("../models/User");
 const dayjs = require("dayjs"); // dayjs pour les dates
 const { checkBody } = require("../utils/checkBody");
-const { fetchTwitchClipData } = require("../services/twitchClips");
+const {
+  fetchTwitchClipData,
+  fetchTwitchClipDownloadUrl,
+} = require("../services/twitchClips");
 const { extractClipId, isClipAlreadyProposed } = require("../utils/clipsUtils");
 const {
   findClipOr404,
@@ -492,6 +495,44 @@ async function getArchivedClips(req, res) {
   }
 }
 
+// CONTROLLER - Obtenir l'URL de téléchargement d'un clip
+async function getClipDownloadUrl(req, res) {
+  const { clipId } = req.query;
+
+  if (!clipId) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Missing clipId parameter" });
+  }
+
+  // Utilise le token Twitch de l'utilisateur
+  const userTwitchToken = req.user.twitch_access_token;
+
+  if (!userTwitchToken) {
+    return res
+      .status(401)
+      .json({ result: false, error: "User not authenticated with Twitch" });
+  }
+
+  const result = await fetchTwitchClipDownloadUrl(clipId, userTwitchToken);
+
+  if (!result.success) {
+    // Log pour debug
+    console.error("Download failed:", result.error);
+
+    return res.status(result.status).json({
+      result: false,
+      error: result.error?.message || "Failed to get download URL",
+    });
+  }
+
+  return res.status(200).json({
+    result: true,
+    downloadUrl: result.downloadData.url,
+    expiresAt: result.downloadData.expires_at,
+  });
+}
+
 module.exports = {
   getClipInfo,
   createClip,
@@ -501,4 +542,5 @@ module.exports = {
   addVoteToClip,
   archiveOldClips,
   getArchivedClips,
+  getClipDownloadUrl,
 };

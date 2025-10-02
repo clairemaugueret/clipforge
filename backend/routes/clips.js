@@ -10,6 +10,7 @@ const {
   addVoteToClip,
   archiveOldClips,
   getArchivedClips,
+  getClipDownloadUrl,
 } = require("../controllers/clipsController");
 const {
   clipEditingStart,
@@ -82,5 +83,12 @@ router.put("/archiving", archiveOldClips);
 router.get("/archives", checkAuth, getArchivedClips);
 // Données entrée: req.body.token (token de l'app)
 // Données de sortie: clips (tableau de tous les clips archivés provenant de la DB) + count (nombre de clips archivés dans la DB)
+
+// GET /clips/download => Obtenir l'URL de téléchargement d'un clip
+router.get("/download", checkAuth, getClipDownloadUrl);
+// Données entrée:
+//   - req.headers.authorization (token de l'app)
+//   - req.query.clipId (id du clip Twitch)
+// Données de sortie: downloadUrl (URL temporaire pour télécharger le MP4), expiresAt (date d'expiration)
 
 module.exports = router;

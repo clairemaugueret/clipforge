@@ -633,7 +633,7 @@ function App() {
   }, []);
 
   // ============================================
-  // HELPER POUR PLAYER TWITCH
+  // PLAYER TWITCH
   // ============================================
 
   // Construit l'URL d'embed Twitch avec le paramètre ?parent= requis
@@ -651,6 +651,40 @@ function App() {
       // Fallback si embedUrl n'est pas parfaitement formée
       const sep = embedUrl.includes("?") ? "&" : "?";
       return `${embedUrl}${sep}parent=${parent}`;
+    }
+  };
+
+  // ============================================
+  // DOWNLOAD CLIP
+  // ============================================
+
+  const handleDownloadClip = async (clipId, clipTitle) => {
+    try {
+      const response = await fetch(
+        `${BACK_URL}/clipmanager/clips/download?clipId=${clipId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.result && data.downloadUrl) {
+        // Crée un lien temporaire pour télécharger le fichier
+        const link = document.createElement("a");
+        link.href = data.downloadUrl;
+        link.download = `${clipTitle || "clip"}.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        alert(`Erreur : ${data.error || "Impossible de télécharger le clip"}`);
+      }
+    } catch (err) {
+      console.error("Erreur lors du téléchargement:", err);
+      alert("Erreur lors du téléchargement du clip");
     }
   };
 
@@ -851,14 +885,27 @@ function App() {
 
                   {/* Lien vers Twitch (on le garde au cas où) */}
                   {selectedClip.link && (
-                    <a
-                      href={selectedClip.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
-                    >
-                      🎥 Voir sur Twitch
-                    </a>
+                    <>
+                      <a
+                        href={selectedClip.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
+                      >
+                        🎥 Voir sur Twitch
+                      </a>
+                      <button
+                        onClick={() =>
+                          handleDownloadClip(
+                            selectedClip.clip_id,
+                            selectedClip.subject
+                          )
+                        }
+                        className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                      >
+                        📥 Télécharger
+                      </button>
+                    </>
                   )}
                 </>
               )}

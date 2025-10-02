@@ -1,16 +1,17 @@
 const User = require("../models/User");
 
 // MIDDLEWARE: Vérification de l'authentification
-// Utilisé pour protéger les routes nécessitant une authentification
 const checkAuth = async (req, res, next) => {
   try {
-    // Récupération du token depuis différentes sources
-    // Gestion sécurisée pour éviter les erreurs si req.body est undefined
     let token = null;
 
     // 1. Vérifier dans les headers (priorité pour les requêtes GET)
     if (req.headers["authorization"]) {
-      token = req.headers["authorization"];
+      const authHeader = req.headers["authorization"];
+      // Enlever le préfixe "Bearer " s'il existe
+      token = authHeader.startsWith("Bearer ")
+        ? authHeader.substring(7)
+        : authHeader;
     }
     // 2. Vérifier dans le body (pour POST/PUT)
     else if (req.body && req.body.token) {
