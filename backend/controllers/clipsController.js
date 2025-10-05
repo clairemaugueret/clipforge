@@ -2,7 +2,10 @@ const Clip = require("../models/Clip");
 const User = require("../models/User");
 const dayjs = require("dayjs"); // dayjs pour les dates
 const { checkBody } = require("../utils/checkBody");
-const { fetchTwitchClipData } = require("../services/twitchClips");
+const {
+  fetchTwitchClipData,
+  fetchTwitchClipDownloadUrl,
+} = require("../services/twitchClips");
 const { extractClipId, isClipAlreadyProposed } = require("../utils/clipsUtils");
 const {
   findClipOr404,
@@ -13,10 +16,28 @@ const { isAuthorOr403, isExpertOr403 } = require("../utils/usersUtils");
 const { sanitizeCommentText } = require("../utils/commentsUtils");
 const { Op } = require("sequelize");
 
-// CONTROLLER - Récupérer les infos d’un clip via l’API Twitch
+// CONTROLLER - Récupérer les infos d'un clip via l'API Twitch
 async function getClipInfo(req, res) {
-  const clipId = extractClipId(req.body.link);
-  const appToken = req.body.token;
+  // Le token est déjà vérifié par le middleware checkAuth
+  // On récupère le lien depuis les query parameters
+  const { link } = req.query;
+
+  if (!link) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Missing link parameter" });
+  }
+
+  const clipId = extractClipId(link);
+
+  if (!clipId) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Invalid Twitch clip URL" });
+  }
+
+  // Le token de l'app est stocké dans req.token par le middleware checkAuth
+  const appToken = req.token;
 
   const result = await fetchTwitchClipData(clipId, appToken);
 
@@ -273,6 +294,7 @@ async function clipPublished(req, res) {
 
 // CONTROLLER - Ajouter un vote à un clip et mise à jour du statut, si appicable (selon conditions)
 async function addVoteToClip(req, res) {
+  // Validation des champs requis
   if (!checkBody(req.body, ["clipId", "vote"])) {
     return res
       .status(400)
@@ -281,11 +303,21 @@ async function addVoteToClip(req, res) {
 
   const { clipId, vote } = req.body;
 
+  // Validation du format du vote
+  const validVotes = ["OK", "KO", "toReview"];
+  if (!validVotes.includes(vote)) {
+    return res.status(400).json({
+      result: false,
+      error: "Invalid vote value. Must be OK, KO, or toReview",
+    });
+  }
+
   try {
+    // Vérifier que le clip existe
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
-    // Sécurise le parsing des votes
+    // Sécurise le parsing des votes existants
     let updatedVotes = [];
 
     if (typeof clip.votes === "string") {
@@ -304,7 +336,7 @@ async function addVoteToClip(req, res) {
       updatedVotes = [];
     }
 
-    // Vérifie si l’utilisateur a déjà voté
+    // Vérifie si l'utilisateur a déjà voté
     const existingVoteIndex = updatedVotes.findIndex(
       (v) => v.userId === req.user.twitch_id
     );
@@ -313,16 +345,17 @@ async function addVoteToClip(req, res) {
       // Met à jour le vote existant
       updatedVotes[existingVoteIndex].result = vote;
     } else {
-      // Ajoute un nouveau vote
+      // Ajoute un nouveau vote avec le rôle de l'utilisateur
       updatedVotes.push({
         userId: req.user.twitch_id,
         userName: req.user.username,
         userAvatar: req.user.avatar_url,
+        userRole: req.user.role, // 🆕 Ajout du rôle (EXPERT ou USER)
         result: vote,
       });
     }
 
-    // Vérifie si tous les experts ont voté
+    // Vérifie si tous les experts ont voté (seuls les votes des EXPERT comptent pour le statut)
     const experts = await User.findAll({ where: { role: "EXPERT" } });
     const expertIds = experts.map((u) => u.twitch_id);
 
@@ -334,28 +367,40 @@ async function addVoteToClip(req, res) {
       votedExpertIds.includes(id)
     );
 
-    // Toujours recalculer le statut
+    // Recalcule le statut du clip selon les règles métier (UNIQUEMENT basé sur les votes des EXPERTS)
     if (allExpertsVoted) {
-      const okVotes = updatedVotes.filter((v) => v.result === "OK").length;
-      const koVotes = updatedVotes.filter((v) => v.result === "KO").length;
+      // Filtre uniquement les votes des experts
+      const expertVotes = updatedVotes.filter((v) =>
+        expertIds.includes(v.userId)
+      );
 
+      const okVotes = expertVotes.filter((v) => v.result === "OK").length;
+      const koVotes = expertVotes.filter((v) => v.result === "KO").length;
+
+      // Règle 1 : Si tous les experts votent OK ET le clip n'est pas éditable -> READY
       if (okVotes === expertIds.length && !clip.editable) {
         clip.status = "READY";
-      } else if (koVotes >= 2) {
+      }
+      // Règle 2 : Si 2 experts ou plus votent KO -> DISCARDED
+      else if (koVotes >= 2) {
         clip.status = "DISCARDED";
-      } else {
+      }
+      // Règle 3 : Sinon reste PROPOSED
+      else {
         clip.status = "PROPOSED";
       }
     } else {
-      clip.status = "PROPOSED"; // Si tous les experts n'ont pas voté
+      // Si tous les experts n'ont pas encore voté -> PROPOSED
+      clip.status = "PROPOSED";
     }
 
+    // Met à jour le clip avec les nouveaux votes et le statut
     await clip.update({
       votes: updatedVotes,
       status: clip.status,
     });
 
-    // Peupler avant d’envoyer
+    // Peupler les données avant d'envoyer (pour inclure les infos complètes des users)
     await populateClipData(clip);
 
     res.status(200).json({
@@ -372,21 +417,47 @@ async function addVoteToClip(req, res) {
 // CONTROLLER - Archiver les clips publiés il y a plus de 2 semaines
 async function archiveOldClips(req, res) {
   try {
-    const period = dayjs().subtract(14, "day").toDate(); // modifier ici le nombre de jours si on veut modifier la période avant l'archivage
+    const twoWeeksAgo = dayjs().subtract(14, "day").toDate();
 
-    // Mettre à jour les clips trop anciens
-    const result = await Clip.updateMany(
-      { status: "PUBLISHED", published_at: { $lt: period } },
-      { $set: { status: "ARCHIVED" } }
+    // Archiver les clips PUBLISHED depuis plus de 2 semaines (basé sur published_at)
+    const publishedResult = await Clip.update(
+      { status: "ARCHIVED" },
+      {
+        where: {
+          status: "PUBLISHED",
+          published_at: { [Op.lt]: twoWeeksAgo },
+        },
+      }
     );
+
+    // Archiver les clips DISCARDED créés il y a plus de 2 semaines (basé sur createdAt)
+    const discardedResult = await Clip.update(
+      { status: "ARCHIVED" },
+      {
+        where: {
+          status: "DISCARDED",
+          createdAt: { [Op.lt]: twoWeeksAgo },
+        },
+      }
+    );
+
+    const totalArchived = publishedResult[0] + discardedResult[0];
 
     res.status(200).json({
       result: true,
-      message: `${result.modifiedCount} clip(s) archived`,
+      message: `${totalArchived} clip(s) archived (${publishedResult[0]} published, ${discardedResult[0]} discarded)`,
+      details: {
+        published: publishedResult[0],
+        discarded: discardedResult[0],
+        total: totalArchived,
+      },
     });
   } catch (error) {
     console.error("Error archiving clips:", error);
-    res.status(500).json({ error: "Server error while archiving clips" });
+    res.status(500).json({
+      result: false,
+      error: "Server error while archiving clips",
+    });
   }
 }
 
@@ -397,16 +468,108 @@ async function getArchivedClips(req, res) {
       where: { status: "ARCHIVED" },
       order: [["createdAt", "DESC"]], // Trie du plus récent au plus ancien
     });
+
+    // Harmonise les données comme pour /all
+    await populateClipData(archivedClips);
+
+    // Ceinture + bretelles : s'assurer que votes/comments sont des tableaux
+    const normalized = archivedClips.map((c) => {
+      const plain = typeof c.toJSON === "function" ? c.toJSON() : c;
+      return {
+        ...plain,
+        votes: Array.isArray(plain.votes) ? plain.votes : [],
+        comments: Array.isArray(plain.comments) ? plain.comments : [],
+      };
+    });
+
     res.status(200).json({
       result: true,
-      count: archivedClips.length,
-      clips: archivedClips,
+      count: normalized.length,
+      clips: normalized,
     });
   } catch (error) {
     console.error("Error fetching archived clips:", error);
     res
       .status(500)
       .json({ error: "Server error while fetching archived clips" });
+  }
+}
+
+// CONTROLLER - Obtenir l'URL de téléchargement d'un clip
+async function getClipDownloadUrl(req, res) {
+  const { clipId } = req.query;
+
+  if (!clipId) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Missing clipId parameter" });
+  }
+
+  try {
+    // 1. Récupérer les infos du clip depuis l'API Twitch pour obtenir broadcaster_id
+    const clipDataResult = await fetchTwitchClipData(clipId, req.token);
+
+    if (!clipDataResult.success) {
+      return res.status(clipDataResult.status).json({
+        result: false,
+        error: clipDataResult.error,
+      });
+    }
+
+    const broadcasterId = clipDataResult.clip.broadcaster_id;
+
+    // 2. Récupérer l'editor_id depuis la DB (utilisateur "Boubou_")
+    const editorUser = await User.findOne({
+      where: { username: "Boubou_" },
+    });
+
+    if (!editorUser) {
+      return res.status(404).json({
+        result: false,
+        error: "Editor user 'Boubou_' not found in database",
+      });
+    }
+
+    const editorId = editorUser.twitch_id;
+
+    // 3. Vérifier que l'utilisateur a un token Twitch valide
+    const userTwitchToken = req.user.twitch_access_token;
+
+    if (!userTwitchToken) {
+      return res.status(401).json({
+        result: false,
+        error: "User not authenticated with Twitch",
+      });
+    }
+
+    // 4. Appeler l'API Twitch pour obtenir l'URL de téléchargement
+    const result = await fetchTwitchClipDownloadUrl(
+      clipId,
+      broadcasterId,
+      editorId,
+      userTwitchToken
+    );
+
+    if (!result.success) {
+      console.error("Download failed:", result.error);
+
+      return res.status(result.status).json({
+        result: false,
+        error: result.error?.message || "Failed to get download URL",
+      });
+    }
+
+    return res.status(200).json({
+      result: true,
+      downloadUrl: result.downloadData.url,
+      expiresAt: result.downloadData.expires_at,
+    });
+  } catch (err) {
+    console.error("Error getting clip download URL:", err);
+    return res.status(500).json({
+      result: false,
+      error: "Server error while getting download URL",
+    });
   }
 }
 
@@ -419,4 +582,5 @@ module.exports = {
   addVoteToClip,
   archiveOldClips,
   getArchivedClips,
+  getClipDownloadUrl,
 };

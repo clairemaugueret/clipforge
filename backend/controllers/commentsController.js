@@ -26,16 +26,24 @@ async function addNewCommentToClip(req, res) {
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
-    // On s'assure que comments est bien un tableau
+    // Après populateClipData, comments est déjà un tableau
+    // On n'a plus besoin de faire JSON.parse
     let updatedComments = [];
-    try {
-      updatedComments = JSON.parse(clip.comments);
-      if (!Array.isArray(updatedComments)) {
+
+    if (Array.isArray(clip.comments)) {
+      // Si c'est déjà un tableau (après populate), on le garde
+      updatedComments = [...clip.comments]; // Copie du tableau
+    } else if (typeof clip.comments === "string") {
+      // Si c'est encore une string (ne devrait pas arriver après populate)
+      try {
+        updatedComments = JSON.parse(clip.comments);
+        if (!Array.isArray(updatedComments)) {
+          updatedComments = [];
+        }
+      } catch (err) {
+        console.error("Invalid JSON in clip.comments:", err);
         updatedComments = [];
       }
-    } catch (err) {
-      console.error("Invalid JSON in clip.comments:", err);
-      updatedComments = [];
     }
 
     // Ajouter le nouveau commentaire
@@ -51,7 +59,7 @@ async function addNewCommentToClip(req, res) {
     // Mettre à jour la colonne JSON dans la DB
     await clip.update({ comments: updatedComments });
 
-    // Peupler avant d’envoyer
+    // Peupler avant d'envoyer
     await populateClipData(clip);
 
     // Réponse au frontend

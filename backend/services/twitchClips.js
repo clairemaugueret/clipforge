@@ -40,4 +40,61 @@ async function fetchTwitchClipData(clipId, appToken) {
   }
 }
 
-module.exports = { fetchTwitchClipData };
+async function fetchTwitchClipDownloadUrl(
+  clipId,
+  broadcasterId,
+  editorId,
+  userAccessToken
+) {
+  try {
+    // Construire l'URL avec tous les paramètres obligatoires
+    const url = new URL("https://api.twitch.tv/helix/clips/download");
+    url.searchParams.append("clip_id", clipId);
+    url.searchParams.append("broadcaster_id", broadcasterId);
+    url.searchParams.append("editor_id", editorId);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Client-ID": process.env.TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${userAccessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Twitch API Error:", errorData);
+      return {
+        success: false,
+        status: response.status,
+        error: errorData,
+      };
+    }
+
+    const data = await response.json();
+
+    if (!data || !data.data || data.data.length === 0) {
+      return {
+        success: false,
+        status: 404,
+        error: { message: "Download URL not found" },
+      };
+    }
+
+    return {
+      success: true,
+      downloadData: data.data[0],
+    };
+  } catch (err) {
+    console.error("Error fetching Twitch clip download URL:", err);
+    return {
+      success: false,
+      status: 500,
+      error: { message: "Failed to fetch download URL" },
+    };
+  }
+}
+
+module.exports = {
+  fetchTwitchClipData,
+  fetchTwitchClipDownloadUrl,
+};

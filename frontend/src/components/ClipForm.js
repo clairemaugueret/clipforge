@@ -1,6 +1,12 @@
-import { useState } from "react";
-import { useSelector, useDispatch } from "react-redux";
+import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 
+const BACK_URL = process.env.REACT_APP_BACK_URL;
+
+/**
+ * Composant formulaire pour créer ou éditer un clip
+ * Récupère automatiquement les infos Twitch dès que l'URL est ajoutée (SAUF en mode édition)
+ */
 function ClipForm({
   allTags,
   onSubmit,
@@ -9,14 +15,123 @@ function ClipForm({
   onChange,
   initialData,
 }) {
+  // États locaux du formulaire
   const [title, setTitle] = useState(initialData?.subject || "");
   const [link, setLink] = useState(initialData?.link || "");
   const [comment, setComment] = useState(initialData?.comment || "");
   const [tags, setTags] = useState(initialData?.tags || []);
   const [editable, setEditable] = useState(initialData?.editable || false);
   const [newTag, setNewTag] = useState("");
+
+  // Nouveaux états pour gérer le chargement des infos Twitch
+  const [isLoadingTwitchInfo, setIsLoadingTwitchInfo] = useState(false);
+  const [twitchInfoError, setTwitchInfoError] = useState(null);
+  const [clipImage, setClipImage] = useState(initialData?.image || "");
+
   const user = useSelector((state) => state.user);
 
+  // Détermine si on est en mode édition ou création
+  const isEditMode = initialData?.originalClipId !== undefined;
+
+  // ============================================
+  // EFFET : AUTO-REMPLISSAGE DES INFOS TWITCH
+  // ============================================
+  useEffect(() => {
+    // Ne déclenche la récupération que si :
+    // 1. Un lien est présent
+    // 2. Ce n'est pas un clip existant en cours de modification
+    if (!link || !link.trim()) {
+      return;
+    }
+
+    // Si c'est une MODIFICATION d'un clip existant (présence de originalClipId)
+    // on ne récupère PAS les infos Twitch pour éviter l'erreur "clip déjà proposé"
+    if (initialData?.originalClipId) {
+      return;
+    }
+
+    // Si c'est un clip existant (pas un draft de création), on ne récupère pas les infos
+    if (initialData?.clip_id && initialData.clip_id !== "draft") {
+      return;
+    }
+
+    // Fonction pour récupérer les infos Twitch
+    const fetchTwitchInfo = async () => {
+      setIsLoadingTwitchInfo(true);
+      setTwitchInfoError(null);
+
+      try {
+        // Encode l'URL du clip pour la passer en query parameter
+        const encodedLink = encodeURIComponent(link);
+
+        const response = await fetch(
+          `${BACK_URL}/clipmanager/clips/twitchinfo?link=${encodedLink}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: user.token,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.result && data.clipData) {
+          // Pré-remplit le titre si vide
+          if (!title || title === "Nouveau clip") {
+            setTitle(data.clipData.title);
+          }
+
+          // Sauvegarde l'image du clip
+          if (data.clipData.thumbnail_url) {
+            setClipImage(data.clipData.thumbnail_url);
+          }
+
+          // Émet les changements pour mettre à jour le brouillon
+          if (onChange) {
+            onChange({
+              ...initialData,
+              subject: data.clipData.title,
+              link,
+              tags,
+              editable,
+              draft: true,
+              image: data.clipData.thumbnail_url,
+              embed_url: data.clipData.embed_url,
+            });
+          }
+        } else {
+          // Gestion des erreurs
+          if (response.status === 409) {
+            setTwitchInfoError("Ce clip a déjà été proposé");
+          } else {
+            setTwitchInfoError(
+              data.error || "Impossible de récupérer les infos du clip"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Erreur lors de la récupération des infos Twitch:", err);
+        setTwitchInfoError("Erreur de connexion au serveur");
+      } finally {
+        setIsLoadingTwitchInfo(false);
+      }
+    };
+
+    // Délai avant de déclencher la requête (debounce)
+    const timeoutId = setTimeout(() => {
+      // Vérifie que l'URL ressemble à un lien Twitch valide
+      if (link.includes("twitch.tv")) {
+        fetchTwitchInfo();
+      }
+    }, 500); // Attend 500ms après la dernière modification
+
+    return () => clearTimeout(timeoutId);
+  }, [link]); // Se déclenche uniquement quand le lien change
+
+  // ============================================
+  // GESTION DES CHANGEMENTS EN TEMPS RÉEL
+  // ============================================
   const emitChange = () => {
     if (onChange) {
       onChange({
@@ -26,10 +141,14 @@ function ClipForm({
         tags,
         editable,
         draft: true,
+        image: clipImage,
       });
     }
   };
 
+  // ============================================
+  // GESTION DES TAGS
+  // ============================================
   const toggleTag = (tag) => {
     setTags((prev) => {
       const updated = prev.includes(tag)
@@ -53,27 +172,22 @@ function ClipForm({
     setNewTag("");
   };
 
+  // ============================================
+  // EXTRACTION DE L'ID DU CLIP
+  // ============================================
   function extractClipId(link) {
     try {
       const url = new URL(link);
       const host = url.hostname;
 
-      // 1) URL directe de clips.twitch.tv
-      //    ex. https://clips.twitch.tv/MonClipUnique
       if (host === "clips.twitch.tv") {
-        // url.pathname === "/MonClipUnique"
         return url.pathname.slice(1);
       }
 
-      // 2) URL “in situ” sur twitch.tv
-      //    ex. https://www.twitch.tv/Chaîne/clip/MonClipUnique
       if (host.includes("twitch.tv") && url.pathname.includes("/clip/")) {
-        // on découpe après "/clip/"
-        // et on retire tout ce qui pourrait suivre (query, slash, etc.)
         return url.pathname.split("/clip/")[1].split("/")[0];
       }
 
-      // 3) Cas paramètre ?clip=ID
       if (url.searchParams.has("clip")) {
         return url.searchParams.get("clip");
       }
@@ -84,6 +198,9 @@ function ClipForm({
     }
   }
 
+  // ============================================
+  // SOUMISSION DU FORMULAIRE
+  // ============================================
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit({
@@ -95,13 +212,21 @@ function ClipForm({
       editable,
       draft: false,
       authorId: { username: user.username },
+      image: clipImage,
+      comment, // Ajout du commentaire pour modification
     });
   };
 
+  // ============================================
+  // RENDU DU FORMULAIRE
+  // ============================================
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-      <h2 className="text-xl font-bold text-gray-100">Proposer un clip</h2>
+      <h2 className="text-xl font-bold text-gray-100">
+        {isEditMode ? "Modifier le clip" : "Proposer un clip"}
+      </h2>
 
+      {/* CHAMP : URL DU CLIP */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Lien du clip
@@ -112,10 +237,44 @@ function ClipForm({
           onChange={(e) => setLink(e.target.value)}
           onBlur={emitChange}
           required
-          className="w-full p-2 border rounded"
+          disabled={isEditMode} // ⭐ Désactive en mode édition
+          className={`w-full p-2 border rounded ${
+            isEditMode ? "bg-gray-600 cursor-not-allowed" : ""
+          }`}
+          placeholder="https://clips.twitch.tv/...   OU  https://www.twitch.tv/evoxia/clip/..."
         />
+
+        {/* Indicateur en mode édition */}
+        {isEditMode && (
+          <p className="text-sm text-gray-400 mt-1">
+            ℹ️ Le lien ne peut pas être modifié
+          </p>
+        )}
+
+        {/* Indicateur de chargement (uniquement en mode création) */}
+        {!isEditMode && isLoadingTwitchInfo && (
+          <p className="text-sm text-blue-400 mt-1">
+            🔄 Récupération des infos du clip...
+          </p>
+        )}
+
+        {/* Affichage des erreurs (uniquement en mode création) */}
+        {!isEditMode && twitchInfoError && (
+          <p className="text-sm text-red-400 mt-1">⚠️ {twitchInfoError}</p>
+        )}
+
+        {/* Confirmation du chargement réussi (uniquement en mode création) */}
+        {!isEditMode &&
+          !isLoadingTwitchInfo &&
+          !twitchInfoError &&
+          clipImage && (
+            <p className="text-sm text-green-400 mt-1">
+              ✅ Infos du clip récupérées automatiquement
+            </p>
+          )}
       </div>
 
+      {/* CHAMP : TITRE DU CLIP */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Titre
@@ -127,9 +286,15 @@ function ClipForm({
           onBlur={emitChange}
           required
           className="w-full p-2 border rounded"
+          placeholder={
+            isEditMode
+              ? "Modifier le titre"
+              : "Le titre sera rempli automatiquement"
+          }
         />
       </div>
 
+      {/* SECTION : SÉLECTION DES TAGS */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
           Tags
@@ -150,6 +315,7 @@ function ClipForm({
             </button>
           ))}
         </div>
+
         <div className="flex gap-2">
           <input
             type="text"
@@ -168,6 +334,7 @@ function ClipForm({
         </div>
       </div>
 
+      {/* CHECKBOX : À ÉDITER */}
       <div className="flex items-center text-gray-100 gap-2">
         <input
           id="editable"
@@ -184,9 +351,10 @@ function ClipForm({
         </label>
       </div>
 
+      {/* CHAMP : COMMENTAIRE */}
       <div>
         <label className="block mb-1 text-sm text-gray-100 font-medium">
-          Commentaire
+          Commentaire {isEditMode && "(optionnel)"}
         </label>
         <textarea
           value={comment}
@@ -194,15 +362,26 @@ function ClipForm({
           onBlur={emitChange}
           rows="3"
           className="w-full p-2 border rounded"
+          placeholder={
+            isEditMode
+              ? "Ajouter un commentaire sur cette modification..."
+              : "Ajouter un commentaire..."
+          }
         />
       </div>
 
+      {/* BOUTONS D'ACTION */}
       <div className="flex gap-2">
         <button
           type="submit"
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          disabled={!isEditMode && isLoadingTwitchInfo}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          Soumettre
+          {!isEditMode && isLoadingTwitchInfo
+            ? "Chargement..."
+            : isEditMode
+              ? "Enregistrer les modifications"
+              : "Soumettre"}
         </button>
         <button
           type="button"
