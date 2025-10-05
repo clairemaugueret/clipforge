@@ -368,29 +368,24 @@ async function addVoteToClip(req, res) {
     );
 
     // Recalcule le statut du clip selon les règles métier (UNIQUEMENT basé sur les votes des EXPERTS)
-    if (allExpertsVoted) {
-      // Filtre uniquement les votes des experts
-      const expertVotes = updatedVotes.filter((v) =>
-        expertIds.includes(v.userId)
-      );
+    // Filtre uniquement les votes des experts
+    const expertVotes = updatedVotes.filter((v) =>
+      expertIds.includes(v.userId)
+    );
 
-      const okVotes = expertVotes.filter((v) => v.result === "OK").length;
-      const koVotes = expertVotes.filter((v) => v.result === "KO").length;
+    const okVotes = expertVotes.filter((v) => v.result === "OK").length;
+    const koVotes = expertVotes.filter((v) => v.result === "KO").length;
 
-      // Règle 1 : Si tous les experts votent OK ET le clip n'est pas éditable -> READY
-      if (okVotes === expertIds.length && !clip.editable) {
-        clip.status = "READY";
-      }
-      // Règle 2 : Si 2 experts ou plus votent KO -> DISCARDED
-      else if (koVotes >= 2) {
-        clip.status = "DISCARDED";
-      }
-      // Règle 3 : Sinon reste PROPOSED
-      else {
-        clip.status = "PROPOSED";
-      }
-    } else {
-      // Si tous les experts n'ont pas encore voté -> PROPOSED
+    // Règle 1 : Si tous les experts votent OK ET le clip n'est pas éditable -> READY
+    if (okVotes === expertIds.length && !clip.editable) {
+      clip.status = "READY";
+    }
+    // Règle 2 : Si 2 experts ou plus votent KO -> DISCARDED
+    else if (koVotes >= 2) {
+      clip.status = "DISCARDED";
+    }
+    // Règle 3 : Sinon reste PROPOSED
+    else {
       clip.status = "PROPOSED";
     }
 
