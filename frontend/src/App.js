@@ -4,6 +4,7 @@ import ClipViewer from "./components/ClipViewer";
 import ClipForm from "./components/ClipForm";
 import FilterModal from "./components/utils/FilterModal";
 import LoginModal from "./components/utils/LoginModal";
+import AlertModal, { useAlert } from "./components/utils/AlertModal";
 import default_user from "./components/images/default_user.png";
 // Import des hooks Redux pour la gestion de l'état global de l'utilisateur
 import { useSelector, useDispatch } from "react-redux";
@@ -20,6 +21,11 @@ function App() {
   const user = useSelector((state) => state.user);
   // Dispatcher pour déclencher des actions Redux (login/logout)
   const dispatch = useDispatch();
+
+  // ============================================
+  // HOOK D'ALERTE
+  // ============================================
+  const { alert, showAlert, closeAlert } = useAlert();
 
   // ============================================
   // ÉTATS LOCAUX DU COMPOSANT
@@ -175,11 +181,46 @@ function App() {
    * Supprime un clip de la liste
    * Si le clip supprimé était sélectionné, désélectionne
    */
-  const handleDeleteClip = (clipId) => {
-    setClips((prev) => prev.filter((clip) => clip.clip_id !== clipId));
+  const handleDeleteClip = async (clipId) => {
+    try {
+      const response = await fetch(
+        `${BACK_URL}/clipmanager/clips/delete?clipId=${clipId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+          },
+        }
+      );
 
-    if (selectedClipId === clipId) {
-      setSelectedClipId(null);
+      const data = await response.json();
+      console.log(data);
+
+      if (data.result) {
+        showAlert({
+          type: "success",
+          title: "Suppression réussie",
+          message: "Le clip a bien été supprimé.",
+        });
+        setClips((prev) => prev.filter((clip) => clip.clip_id !== clipId));
+
+        if (selectedClipId === clipId) {
+          setSelectedClipId(null);
+        }
+      } else {
+        showAlert({
+          type: "error",
+          title: "Erreur de suppression",
+          message: data.error || "Impossible de supprimer le clip",
+        });
+      }
+    } catch (err) {
+      console.error("Erreur lors de la suppression:", err);
+      showAlert({
+        type: "error",
+        title: "Erreur de suppression",
+        message: "Erreur lors de la suppression du clip",
+      });
     }
   };
 
@@ -194,13 +235,21 @@ function App() {
   const handleCancelForm = () => {
     // Si on annule un brouillon, on demande confirmation
     if (selectedClip?.draft) {
-      const confirmDelete = window.confirm(
-        "Annuler va supprimer ce brouillon. Continuer ?"
-      );
-      if (!confirmDelete) return;
-
-      // Supprime le brouillon de la liste
-      setClips((prev) => prev.filter((clip) => clip.clip_id !== "draft"));
+      showAlert({
+        type: "confirm",
+        title: "Confirmer l'annulation",
+        message: "Annuler va supprimer ce brouillon. Continuer ?",
+        showCancel: true,
+        confirmText: "Supprimer",
+        cancelText: "Annuler",
+        onConfirm: () => {
+          // Supprime le brouillon de la liste
+          setClips((prev) => prev.filter((clip) => clip.clip_id !== "draft"));
+          setShowForm(false);
+          setSelectedClipId(null);
+        },
+      });
+      return;
     }
 
     setShowForm(false);
@@ -308,14 +357,30 @@ function App() {
 
           // 5. Nettoyer le formulaire
           setShowForm(false);
+
+          // 6. Afficher un message de succès
+          showAlert({
+            type: "success",
+            title: "Clip modifié",
+            message: "Le clip a été modifié avec succès !",
+          });
         }
       } else {
         console.error("Erreur:", data.error);
-        alert(`Erreur : ${data.error}`);
+        showAlert({
+          type: "error",
+          title: "Erreur de modification",
+          message:
+            data.error || "Une erreur est survenue lors de la modification",
+        });
       }
     } catch (err) {
       console.error("Erreur backend :", err);
-      alert("Erreur lors de la modification du clip");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur lors de la modification du clip",
+      });
     }
   };
 
@@ -354,14 +419,29 @@ function App() {
 
           // 5. Nettoyer le formulaire
           setShowForm(false);
+
+          // 6. Afficher un message de succès
+          showAlert({
+            type: "success",
+            title: "Clip créé",
+            message: "Le clip a été créé avec succès !",
+          });
         }
       } else {
         console.error("Erreur:", data.error);
-        alert(`Erreur : ${data.error}`);
+        showAlert({
+          type: "error",
+          title: "Erreur de création",
+          message: data.error || "Une erreur est survenue lors de la création",
+        });
       }
     } catch (err) {
       console.error("Erreur backend :", err);
-      alert("Erreur lors de la création du clip");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur lors de la création du clip",
+      });
     }
   };
 
@@ -453,11 +533,19 @@ function App() {
         setShowArchived(true);
         setSelectedClipId(null); // Réinitialise la sélection
       } else {
-        alert("Erreur lors du chargement des clips archivés");
+        showAlert({
+          type: "error",
+          title: "Erreur de chargement",
+          message: "Erreur lors du chargement des clips archivés",
+        });
       }
     } catch (error) {
       console.error("Erreur lors du chargement des clips archivés :", error);
-      alert("Erreur de connexion au serveur");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur de connexion au serveur",
+      });
     }
   };
 
@@ -484,7 +572,11 @@ function App() {
       setAllTags(uniqueTags);
     } catch (error) {
       console.error("Erreur lors du chargement des clips :", error);
-      alert("Erreur de connexion au serveur");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur de connexion au serveur",
+      });
     }
   };
 
@@ -584,13 +676,21 @@ function App() {
         } else {
           // Si le code a déjà été consommé, on évite d'alerter si on est déjà connecté
           if (!user?.username) {
-            alert(`❌ Échec de la connexion. ${data.error || "Réessayez."}`);
+            showAlert({
+              type: "error",
+              title: "Échec de connexion",
+              message: data.error || "Impossible de se connecter. Réessayez.",
+            });
           }
         }
       })
       .catch(() => {
         if (!user?.username) {
-          alert("❌ Erreur de connexion");
+          showAlert({
+            type: "error",
+            title: "Erreur de connexion",
+            message: "Une erreur est survenue lors de la connexion",
+          });
         }
       });
   }, [dispatch, user?.username]);
@@ -644,11 +744,14 @@ function App() {
 
           // Afficher une alerte si des clips ont été archivés
           if (archiveData.result && archiveData.details.total > 0) {
-            alert(
-              `${archiveData.details.total} clip(s) ont été automatiquement archivés :\n` +
+            showAlert({
+              type: "warning",
+              title: "Archivage automatique",
+              message:
+                `${archiveData.details.total} clip(s) ont été automatiquement archivés :\n` +
                 `- ${archiveData.details.published} clip(s) publiés\n` +
-                `- ${archiveData.details.discarded} clip(s) refusés`
-            );
+                `- ${archiveData.details.discarded} clip(s) refusés`,
+            });
           }
         }
 
@@ -721,11 +824,19 @@ function App() {
         link.click();
         document.body.removeChild(link);
       } else {
-        alert(`Erreur : ${data.error || "Impossible de télécharger le clip"}`);
+        showAlert({
+          type: "error",
+          title: "Erreur de téléchargement",
+          message: data.error || "Impossible de télécharger le clip",
+        });
       }
     } catch (err) {
       console.error("Erreur lors du téléchargement:", err);
-      alert("Erreur lors du téléchargement du clip");
+      showAlert({
+        type: "error",
+        title: "Erreur de téléchargement",
+        message: "Erreur lors du téléchargement du clip",
+      });
     }
   };
 
@@ -919,13 +1030,7 @@ function App() {
             ============================================ */}
         <main className="flex-1 bg-gray-700 p-2 sm:p-4 overflow-auto">
           {!user.username ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-white">
-                <p className="text-lg sm:text-xl mb-4">
-                  Connectez-vous pour accéder aux clips
-                </p>
-              </div>
-            </div>
+            <div className="flex items-center justify-center h-full"></div>
           ) : (
             <>
               {/* Affiche le formulaire si showForm est true, sinon le viewer */}
@@ -951,6 +1056,7 @@ function App() {
                     onModifyClip={handleModifyClip}
                     onDeleteClip={handleDeleteClip}
                     onClipUpdate={handleClipUpdate}
+                    showAlert={showAlert}
                   />
                 )
               )}
@@ -1105,6 +1211,19 @@ function App() {
           onLogout={userLogout}
         />
       )}
+
+      {/* Modale d'alerte */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        onConfirm={alert.onConfirm}
+        confirmText={alert.confirmText}
+        cancelText={alert.cancelText}
+        showCancel={alert.showCancel}
+      />
     </div>
   );
 }

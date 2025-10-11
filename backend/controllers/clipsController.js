@@ -111,13 +111,21 @@ async function createClip(req, res) {
       });
     }
 
+    let resultVote;
+
+    if (editable) {
+      resultVote = "toReview";
+    } else {
+      resultVote = "OK";
+    }
+
     const votes = [
       {
         userId: req.user.twitch_id,
         userName: req.user.username,
         userAvatar: req.user.avatar_url,
-        result: "OK",
-      }, // Initialiser avec un vote OK de l'auteur
+        result: resultVote,
+      }, // Initialiser avec vote de l'auteur
     ];
 
     const newClip = await Clip.create({
@@ -153,10 +161,12 @@ async function getAllClips(req, res) {
   try {
     const clips = await Clip.findAll({
       where: {
-        status: { [Op.ne]: "ARCHIVED" },
+        status: {
+          [Op.notIn]: ["ARCHIVED_PUBLISHED", "ARCHIVED_DISCARDED"],
+        },
       },
       order: [["createdAt", "DESC"]], // Trie du plus récent au plus ancien
-    }); // tous les clips sauf les archivés
+    });
 
     // Peupler avant d’envoyer
     await populateClipData(clips);
@@ -317,6 +327,13 @@ async function addVoteToClip(req, res) {
     const clip = await findClipOr404(clipId, res);
     if (!clip) return;
 
+    // Empêcher le vote si le clip est "archivé (publié)""
+    if (clip.status === "ARCHIVED_PUBLISHED") {
+      return res
+        .status(403)
+        .json({ result: false, error: "Archived clips cannot be voted on" });
+    }
+
     // Sécurise le parsing des votes existants
     let updatedVotes = [];
 
@@ -367,24 +384,26 @@ async function addVoteToClip(req, res) {
       votedExpertIds.includes(id)
     );
 
-    // Recalcule le statut du clip selon les règles métier (UNIQUEMENT basé sur les votes des EXPERTS)
+    // Recalcule le statut du clip selon les règles (votes des EXPERTS uniquement)
     // Filtre uniquement les votes des experts
     const expertVotes = updatedVotes.filter((v) =>
       expertIds.includes(v.userId)
     );
-
     const okVotes = expertVotes.filter((v) => v.result === "OK").length;
     const koVotes = expertVotes.filter((v) => v.result === "KO").length;
 
-    // Règle 1 : Si tous les experts votent OK ET le clip n'est pas éditable -> READY
-    if (okVotes === expertIds.length && !clip.editable) {
+    const totalExperts = expertIds.length;
+    const majorityThreshold = Math.floor(totalExperts / 2) + 1; // majorité stricte > 50%
+
+    // Règle READY : tous les experts ont voté, clip non éditable, et majorité de OK
+    if (allExpertsVoted && !clip.editable && okVotes >= majorityThreshold) {
       clip.status = "READY";
     }
-    // Règle 2 : Si 2 experts ou plus votent KO -> DISCARDED
-    else if (koVotes >= 2) {
+    // Règle DISCARDED : dès que la majorité (sur le total d'experts) a voté KO
+    else if (koVotes >= majorityThreshold) {
       clip.status = "DISCARDED";
     }
-    // Règle 3 : Sinon reste PROPOSED
+    // Sinon : PROPOSED
     else {
       clip.status = "PROPOSED";
     }
@@ -412,11 +431,12 @@ async function addVoteToClip(req, res) {
 // CONTROLLER - Archiver les clips publiés il y a plus de 2 semaines
 async function archiveOldClips(req, res) {
   try {
+    const oneWeeksAgo = dayjs().subtract(7, "day").toDate();
     const twoWeeksAgo = dayjs().subtract(14, "day").toDate();
 
     // Archiver les clips PUBLISHED depuis plus de 2 semaines (basé sur published_at)
     const publishedResult = await Clip.update(
-      { status: "ARCHIVED" },
+      { status: "ARCHIVED_PUBLISHED" },
       {
         where: {
           status: "PUBLISHED",
@@ -427,11 +447,11 @@ async function archiveOldClips(req, res) {
 
     // Archiver les clips DISCARDED créés il y a plus de 2 semaines (basé sur createdAt)
     const discardedResult = await Clip.update(
-      { status: "ARCHIVED" },
+      { status: "ARCHIVED_DISCARDED" },
       {
         where: {
           status: "DISCARDED",
-          createdAt: { [Op.lt]: twoWeeksAgo },
+          createdAt: { [Op.lt]: oneWeeksAgo },
         },
       }
     );
@@ -460,7 +480,11 @@ async function archiveOldClips(req, res) {
 async function getArchivedClips(req, res) {
   try {
     const archivedClips = await Clip.findAll({
-      where: { status: "ARCHIVED" },
+      where: {
+        status: {
+          [Op.in]: ["ARCHIVED_PUBLISHED", "ARCHIVED_DISCARDED"],
+        },
+      },
       order: [["createdAt", "DESC"]], // Trie du plus récent au plus ancien
     });
 
@@ -568,6 +592,54 @@ async function getClipDownloadUrl(req, res) {
   }
 }
 
+// CONTROLLER - Supprimer un clip (par l'auteur ou un expert)
+async function deleteClip(req, res) {
+  const clipId = req.query.clipId;
+
+  if (!clipId) {
+    return res
+      .status(400)
+      .json({ result: false, error: "Missing clipId parameter" });
+  }
+
+  try {
+    // Récupère le clip ou renvoie 404 via la util
+    const clip = await findClipOr404(clipId, res);
+    if (!clip) return; // findClipOr404 a déjà renvoyé la réponse 404
+
+    // Empêche la suppression des clips archivés
+    if (
+      clip.status === "ARCHIVED_PUBLISHED" ||
+      clip.status === "ARCHIVED_DISCARDED"
+    ) {
+      return res
+        .status(403)
+        .json({ result: false, error: "Archived clips cannot be deleted" });
+    }
+
+    // Autorisation : soit l'auteur, soit un expert
+    // Si l'utilisateur n'est pas l'auteur, isAuthorOr403 renverra 403 et on s'arrête.
+    if (!isAuthorOr403(clip, req.user.twitch_id, res)) {
+      // Pas auteur -> vérifier s'il est expert (isExpertOr403 renvoie 403 si non)
+      if (!isExpertOr403(req.user, res)) {
+        return; // isExpertOr403 a renvoyé 403
+      }
+      // Si on arrive ici : c'est un expert autorisé
+    }
+
+    await clip.destroy();
+
+    res.status(200).json({
+      result: true,
+      message: "Clip successfully deleted",
+      clipId,
+    });
+  } catch (err) {
+    console.error("Error deleting clip:", err);
+    res.status(500).json({ result: false, error: "Failed to delete clip" });
+  }
+}
+
 module.exports = {
   getClipInfo,
   createClip,
@@ -578,4 +650,5 @@ module.exports = {
   archiveOldClips,
   getArchivedClips,
   getClipDownloadUrl,
+  deleteClip,
 };

@@ -9,7 +9,8 @@ export const translateStatus = (status) => {
     DISCARDED: "Refusé",
     READY: "Prêt à publier",
     PUBLISHED: "Publié",
-    ARCHIVED: "Archivé",
+    ARCHIVED_PUBLISHED: "Archivé (publié)",
+    ARCHIVED_DISCARDED: "Archivé (refusé)",
   };
 
   return translations[status] || status;
@@ -24,7 +25,8 @@ export const getStatusColor = (status) => {
     READY: "bg-green-600 border-green-600",
     DISCARDED: "bg-red-600 border-red-600",
     PUBLISHED: "bg-blue-600 border-blue-600",
-    ARCHIVED: "bg-gray-500 border-gray-500",
+    ARCHIVED_PUBLISHED: "bg-gray-600 border-gray-600",
+    ARCHIVED_DISCARDED: "bg-red-800/60 border-red-800/60",
   };
 
   return colors[status] || "bg-gray-500 border-gray-500";

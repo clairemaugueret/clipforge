@@ -47,7 +47,8 @@ Clip.init(
         "READY",
         "PUBLISHED",
         "DISCARDED",
-        "ARCHIVED"
+        "ARCHIVED_PUBLISHED",
+        "ARCHIVED_DISCARDED"
       ),
       defaultValue: "PROPOSED",
     },

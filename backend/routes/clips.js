@@ -11,6 +11,7 @@ const {
   archiveOldClips,
   getArchivedClips,
   getClipDownloadUrl,
+  deleteClip,
 } = require("../controllers/clipsController");
 const {
   clipEditingStart,
@@ -90,5 +91,12 @@ router.get("/download", checkAuth, getClipDownloadUrl);
 //   - req.headers.authorization (token de l'app)
 //   - req.query.clipId (id du clip Twitch)
 // Données de sortie: downloadUrl (URL temporaire pour télécharger le MP4), expiresAt (date d'expiration)
+
+// DELETE /clips/delete => Supprimer un clip (auteur ou expert)
+router.delete("/delete", checkAuth, deleteClip);
+// Données entrée:
+//   - req.headers.authorization (token de l'app)
+//   - req.query.clipId (id du clip Twitch)
+// Données de sortie: message ("Clip successfully deleted")
 
 module.exports = router;

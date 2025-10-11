@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { formatHumanDate } from "./utils/date";
 import { translateStatus, translateEditStatus } from "./utils/translations";
-import ExpertVoteModale from "./utils/vote";
-import EditClaimModal from "./utils/EditClaimModal";
-import ConfirmDeleteModal from "./utils/ConfirmDeleteModal";
+import VoteModale from "./utils/VoteModal";
 import default_user from "./images/default_user.png";
 
 /**
@@ -17,6 +15,7 @@ import default_user from "./images/default_user.png";
  * @param {Function} onModifyClip - Callback pour passer en mode édition
  * @param {Function} onDeleteClip - Callback pour supprimer le clip
  * @param {Function} onClipUpdate - Callback pour mettre à jour le clip dans App.js
+ * @param {Function} showAlert - Fonction pour afficher les alertes
  */
 function ClipViewer({
   clip,
@@ -25,6 +24,7 @@ function ClipViewer({
   onModifyClip,
   onDeleteClip,
   onClipUpdate,
+  showAlert,
 }) {
   const BACK_URL = process.env.REACT_APP_BACK_URL;
 
@@ -37,12 +37,6 @@ function ClipViewer({
 
   // Affichage de la modale de vote expert
   const [showVoteModal, setShowVoteModal] = useState(false);
-
-  // Affichage de la modale de confirmation de suppression
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-
-  // Affichage de la modale de prise en charge de l'édition
-  const [showEditModal, setShowEditModal] = useState(false);
 
   // ============================================
   // FILTRAGE DES UTILISATEURS
@@ -87,11 +81,19 @@ function ClipViewer({
         setCommentInput("");
       } else {
         console.error("Erreur lors de l'ajout du commentaire:", data.error);
-        alert("Erreur lors de l'ajout du commentaire");
+        showAlert({
+          type: "error",
+          title: "Erreur de commentaire",
+          message: "Erreur lors de l'ajout du commentaire",
+        });
       }
     } catch (error) {
       console.error("Erreur réseau:", error);
-      alert("Erreur de connexion au serveur");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur de connexion au serveur",
+      });
     }
   };
 
@@ -132,8 +134,38 @@ function ClipViewer({
   };
 
   // ============================================
+  // GESTION DE LA SUPPRESSION
+  // ============================================
+
+  const handleDeleteClick = () => {
+    showAlert({
+      type: "confirm",
+      title: "Supprimer ce clip ?",
+      message: "Cette action est irréversible.",
+      showCancel: true,
+      confirmText: "Supprimer",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        onDeleteClip?.(clip.clip_id);
+      },
+    });
+  };
+
+  // ============================================
   // GESTION DE L'EDITION D'UN CLIP À EDITER
   // ============================================
+
+  const handleEditClaimClick = () => {
+    showAlert({
+      type: "confirm",
+      title: "Prendre en charge l'édition",
+      message: "Souhaites-tu prendre en charge l'édition de ce clip ?",
+      showCancel: true,
+      confirmText: "Je prends !",
+      cancelText: "Annuler",
+      onConfirm: handleEditStart,
+    });
+  };
 
   const handleEditStart = async () => {
     try {
@@ -153,48 +185,98 @@ function ClipViewer({
         if (onClipUpdate) {
           onClipUpdate(data.clip);
         }
-        setShowEditModal(false);
+        showAlert({
+          type: "success",
+          title: "Édition prise en charge",
+          message: "Tu as pris en charge l'édition de ce clip",
+        });
       } else {
         console.error("Erreur lors de la prise en charge:", data.error);
-        alert(`Erreur: ${data.error}`);
+        showAlert({
+          type: "error",
+          title: "Erreur de prise en charge",
+          message: data.error || "Impossible de prendre en charge l'édition",
+        });
       }
     } catch (error) {
       console.error("Erreur réseau:", error);
-      alert("Erreur lors de la communication avec le serveur");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur lors de la communication avec le serveur",
+      });
     }
   };
 
   const handleEditEnd = async () => {
-    try {
-      const response = await fetch(`${BACK_URL}/clipmanager/clips/editend`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: user.token,
-          clipId: clip.clip_id,
-        }),
-      });
+    showAlert({
+      type: "confirm",
+      title: "Terminer l'édition",
+      message: "Confirmer que l'édition de ce clip est terminée ?",
+      showCancel: true,
+      confirmText: "Oui, c'est fini !",
+      cancelText: "Annuler",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(
+            `${BACK_URL}/clipmanager/clips/editend`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                token: user.token,
+                clipId: clip.clip_id,
+              }),
+            }
+          );
 
-      const data = await response.json();
+          const data = await response.json();
 
-      if (data.result) {
-        // Mettre à jour le clip dans App.js
-        if (onClipUpdate) {
-          onClipUpdate(data.clip);
+          if (data.result) {
+            // Mettre à jour le clip dans App.js
+            if (onClipUpdate) {
+              onClipUpdate(data.clip);
+            }
+            showAlert({
+              type: "success",
+              title: "Édition terminée",
+              message: "L'édition du clip est maintenant terminée",
+            });
+          } else {
+            console.error("Erreur lors de la fin d'édition:", data.error);
+            showAlert({
+              type: "error",
+              title: "Erreur de fin d'édition",
+              message: data.error || "Impossible de terminer l'édition",
+            });
+          }
+        } catch (error) {
+          console.error("Erreur réseau:", error);
+          showAlert({
+            type: "error",
+            title: "Erreur de connexion",
+            message: "Erreur lors de la communication avec le serveur",
+          });
         }
-      } else {
-        console.error("Erreur lors de la fin d'édition:", data.error);
-        alert(`Erreur: ${data.error}`);
-      }
-    } catch (error) {
-      console.error("Erreur réseau:", error);
-      alert("Erreur lors de la communication avec le serveur");
-    }
+      },
+    });
   };
 
   // ============================================
   // GESTION DE LA PUBLICATION DU CLIP
   // ============================================
+
+  const handlePublishClick = () => {
+    showAlert({
+      type: "confirm",
+      title: "Marquer comme publié",
+      message: "Confirmer que ce clip a été publié sur TikTok ?",
+      showCancel: true,
+      confirmText: "Oui, publié",
+      cancelText: "Annuler",
+      onConfirm: handlePublished,
+    });
+  };
 
   const handlePublished = async () => {
     try {
@@ -214,14 +296,26 @@ function ClipViewer({
         if (onClipUpdate) {
           onClipUpdate(data.clip);
         }
-        alert("✅ Clip marqué comme publié sur TikTok !");
+        showAlert({
+          type: "success",
+          title: "Clip publié",
+          message: "Le clip a été marqué comme publié sur TikTok !",
+        });
       } else {
         console.error("Erreur lors de la publication:", data.error);
-        alert(`Erreur: ${data.error}`);
+        showAlert({
+          type: "error",
+          title: "Erreur de publication",
+          message: data.error || "Impossible de marquer le clip comme publié",
+        });
       }
     } catch (error) {
       console.error("Erreur réseau:", error);
-      alert("Erreur lors de la communication avec le serveur");
+      showAlert({
+        type: "error",
+        title: "Erreur de connexion",
+        message: "Erreur lors de la communication avec le serveur",
+      });
     }
   };
 
@@ -269,21 +363,22 @@ function ClipViewer({
                     ? "bg-red-600 text-white"
                     : clip.status === "PUBLISHED"
                       ? "bg-blue-600 text-white"
-                      : clip.status === "ARCHIVED"
+                      : clip.status === "ARCHIVED_PUBLISHED"
                         ? "bg-gray-600 text-white"
-                        : "bg-yellow-600 text-white"
+                        : clip.status === "ARCHIVED_DISCARDED"
+                          ? "bg-red-800/60 text-white"
+                          : "bg-yellow-600 text-white"
               }`}
             >
               Statut : {translateStatus(clip.status)}
             </span>
 
-            {/* Bouton de publication si statut READY */}
             {/* Bouton de publication si statut READY et utilisateur EXPERT */}
             {clip.status === "READY" && user.role === "EXPERT" && (
               <>
                 <div className="hidden sm:block">📜</div>
                 <button
-                  onClick={handlePublished}
+                  onClick={handlePublishClick}
                   className="text-xs sm:text-sm px-2 sm:px-3 py-1 border-2 border-green-600 text-white bg-transparent rounded font-medium hover:bg-green-600 active:bg-green-700 transition-colors"
                 >
                   📤 Clip publié sur TikTok
@@ -311,7 +406,7 @@ function ClipViewer({
                 </button>
 
                 <button
-                  onClick={() => setShowDeleteModal(true)}
+                  onClick={handleDeleteClick}
                   className="text-xs px-2 py-1.5 text-white rounded font-medium flex-1 min-w-[80px] bg-red-700 hover:bg-red-800 cursor-pointer"
                   title="Clique pour supprimer cette proposition"
                 >
@@ -321,16 +416,18 @@ function ClipViewer({
             )}
 
             {/* Bouton Voter - visible sur mobile, caché sur desktop */}
-            <button
-              onClick={() => setShowVoteModal(true)}
-              className={`lg:hidden text-xs px-3 py-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium ${
-                user.username === clip.authorId.username
-                  ? "flex-1 min-w-[80px]"
-                  : "w-full"
-              }`}
-            >
-              🗳️ Voter
-            </button>
+            {clip.status !== "ARCHIVED_PUBLISHED" && (
+              <button
+                onClick={() => setShowVoteModal(true)}
+                className={`lg:hidden text-xs px-3 py-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium ${
+                  user.username === clip.authorId.username
+                    ? "flex-1 min-w-[80px]"
+                    : "w-full"
+                }`}
+              >
+                🗳️ Voter
+              </button>
+            )}
           </div>
 
           {/* LIGNE 2 : Statut d'édition (si applicable) */}
@@ -338,7 +435,7 @@ function ClipViewer({
             <div className="flex items-center">
               {clip.editable && !clip.edit_progress && (
                 <button
-                  onClick={() => setShowEditModal(true)}
+                  onClick={handleEditClaimClick}
                   className="text-xs px-2 py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 font-medium w-full"
                 >
                   🎬 {translateEditStatus(clip)} → Prendre en charge ?
@@ -424,21 +521,15 @@ function ClipViewer({
             </div>
 
             {/* Bouton Voter - visible uniquement sur desktop */}
-            <button
-              onClick={() => setShowVoteModal(true)}
-              className="hidden lg:block text-xs px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium whitespace-nowrap"
-            >
-              🗳️ Voter
-            </button>
+            {clip.status !== "ARCHIVED_PUBLISHED" && (
+              <button
+                onClick={() => setShowVoteModal(true)}
+                className="hidden lg:block text-xs px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium whitespace-nowrap"
+              >
+                🗳️ Voter
+              </button>
+            )}
           </div>
-
-          {/* Modale de confirmation pour prendre en charge l'édition */}
-          {showEditModal && (
-            <EditClaimModal
-              onCancel={() => setShowEditModal(false)}
-              onConfirm={handleEditStart}
-            />
-          )}
         </div>
       </div>
 
@@ -519,22 +610,12 @@ function ClipViewer({
 
       {/* Modale de vote pour les experts */}
       {showVoteModal && (
-        <ExpertVoteModale
+        <VoteModale
           user={user}
           clip={clip}
           onVote={handleVoteSuccess}
           onClose={() => setShowVoteModal(false)}
-        />
-      )}
-
-      {/* Modale de confirmation de suppression */}
-      {showDeleteModal && (
-        <ConfirmDeleteModal
-          onConfirm={() => {
-            onDeleteClip?.(clip.clip_id); // Supprime le clip via le callback parent
-            setShowDeleteModal(false);
-          }}
-          onCancel={() => setShowDeleteModal(false)}
+          showAlert={showAlert}
         />
       )}
     </div>

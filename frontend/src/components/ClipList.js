@@ -89,7 +89,7 @@ function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
                       : "text-white"
                   }`}
                 >
-                  {clip.subject}
+                  {clip.subject || "Nouveau clip"}
                 </h3>
                 {clip.draft && (
                   <span className="text-[9px] sm:text-[10px] bg-yellow-600 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-semibold">
@@ -121,9 +121,11 @@ function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
                             ? "bg-red-500"
                             : clip.status === "PUBLISHED"
                               ? "bg-blue-500"
-                              : clip.status === "ARCHIVED"
-                                ? "bg-gray-500"
-                                : "bg-yellow-500"
+                              : clip.status === "ARCHIVED_PUBLISHED"
+                                ? "bg-gray-600"
+                                : clip.status === "ARCHIVED_DISCARDED"
+                                  ? "bg-red-800/60"
+                                  : "bg-yellow-500"
                       }`}
                     ></span>
                     {translateStatus(clip.status)}
