@@ -58,6 +58,12 @@ function App() {
   // Indique si on affiche les clips archivés ou les clips actifs
   const [showArchived, setShowArchived] = useState(false);
 
+  // État pour contrôler l'affichage de la sidebar mobile
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+
+  // État pour stocker les statuts de vote sélectionnés
+  const [selectedVoteStatus, setSelectedVoteStatus] = useState([]);
+
   // ============================================
   // VARIABLES DÉRIVÉES
   // ============================================
@@ -109,6 +115,27 @@ function App() {
     }
   };
 
+  /**
+   * Ajoute ou retire un statut de vote de la sélection pour le filtrage
+   */
+  const toggleVoteStatus = (voteStatus) => {
+    setSelectedVoteStatus((prev) =>
+      prev.includes(voteStatus)
+        ? prev.filter((v) => v !== voteStatus)
+        : [...prev, voteStatus]
+    );
+  };
+
+  /**
+   * Efface tous les filtres actifs
+   */
+  const clearAllFilters = () => {
+    setSelectedTags([]);
+    setSelectedStatuses([]);
+    setSelectedEditStatuses([]);
+    setSelectedVoteStatus([]);
+  };
+
   // ============================================
   // GESTION DE LA CRÉATION DE CLIP (BROUILLON)
   // ============================================
@@ -137,6 +164,7 @@ function App() {
     // Sélectionne automatiquement le brouillon et affiche le formulaire
     setSelectedClipId("draft");
     setShowForm(true);
+    setShowMobileSidebar(false); // Ferme la sidebar sur mobile
   };
 
   // ============================================
@@ -210,6 +238,7 @@ function App() {
     setSelectedClipId(clipId);
     // Affiche le formulaire uniquement si c'est un brouillon
     setShowForm(freshClip?.clip_id === "draft");
+    setShowMobileSidebar(false); // Ferme la sidebar sur mobile après sélection
   };
 
   // ============================================
@@ -341,13 +370,7 @@ function App() {
   // ============================================
 
   /**
-   * Filtre les clips selon les tags, les statuts ET les statuts d'édition sélectionnés
-   * - Si aucun tag sélectionné, ignore le filtre par tag
-   * - Si aucun statut sélectionné, ignore le filtre par statut
-   * - Si aucun statut d'édition sélectionné, ignore le filtre par édition
-   * - Si des tags sont sélectionnés, n'affiche que les clips qui ont TOUS les tags
-   * - Si des statuts sont sélectionnés, n'affiche que les clips avec l'un de ces statuts
-   * - Si des statuts d'édition sont sélectionnés, applique la logique appropriée
+   * Filtre les clips selon les tags, les statuts, les statuts d'édition ET le statut de vote
    */
   const filteredClips = clips.filter((clip) => {
     // Filtre par tags
@@ -374,8 +397,27 @@ function App() {
       });
     }
 
-    // Le clip doit correspondre aux trois filtres
-    return matchesTags && matchesStatus && matchesEditStatus;
+    // Filtre par statut de vote
+    let matchesVoteStatus = true;
+    if (selectedVoteStatus.length > 0) {
+      const userHasVoted = clip.votes?.some(
+        (vote) => vote.userName === user.username
+      );
+
+      matchesVoteStatus = selectedVoteStatus.some((voteStatus) => {
+        if (voteStatus === "VOTED") {
+          return userHasVoted;
+        } else if (voteStatus === "NOT_VOTED") {
+          return !userHasVoted;
+        }
+        return false;
+      });
+    }
+
+    // Le clip doit correspondre aux quatre filtres
+    return (
+      matchesTags && matchesStatus && matchesEditStatus && matchesVoteStatus
+    );
   });
 
   // ============================================
@@ -541,7 +583,7 @@ function App() {
           window.history.replaceState({}, document.title, "/");
           alert("✅ Connexion réussie !");
         } else {
-          // Si le code a déjà été consommé, on évite d’alerter si on est déjà connecté
+          // Si le code a déjà été consommé, on évite d'alerter si on est déjà connecté
           if (!user?.username) {
             alert(`❌ Échec de la connexion. ${data.error || "Réessayez."}`);
           }
@@ -697,27 +739,52 @@ function App() {
       {/* ============================================
           HEADER : Titre et bouton de connexion
           ============================================ */}
-      <header className="bg-indigo-950 p-4 shadow-md flex justify-between items-center">
-        <h1
-          onClick={() => (window.location.href = "/")}
-          className="text-xl font-bold text-white cursor-pointer hover:text-indigo-900 transition-colors"
-          title="Retour à l'accueil"
-        >
-          🎬 Clips Manager{" "}
-          <span className="text-base text-indigo-500 opacity-50">
-            • TikTok @evoxia.clips
-          </span>
-        </h1>
-        {/* Avatar cliquable pour ouvrir la modale de connexion/déconnexion */}
+      <header className="bg-indigo-950 p-2 sm:p-4 shadow-md flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          {/* Bouton hamburger pour mobile */}
+          {user.username && (
+            <button
+              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+              className="lg:hidden text-white p-2 hover:bg-indigo-900 rounded"
+              aria-label="Menu"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+          )}
 
-        <div className="flex justify-between items-center">
+          <h1
+            onClick={() => (window.location.href = "/")}
+            className="text-base sm:text-xl font-bold text-white cursor-pointer hover:text-indigo-300 transition-colors"
+            title="Retour à l'accueil"
+          >
+            🎬 Clips Manager{" "}
+            <span className="hidden sm:inline text-sm sm:text-base text-indigo-500 opacity-50">
+              • TikTok @evoxia.clips
+            </span>
+          </h1>
+        </div>
+
+        {/* Avatar cliquable pour ouvrir la modale de connexion/déconnexion */}
+        <div className="flex justify-between items-center gap-2">
           {user.username ? (
-            <p className="text-indigo-400 opacity-40 text-sm mr-4 font-medium italic">
+            <p className="hidden md:block text-indigo-400 opacity-40 text-xs sm:text-sm font-medium italic">
               Connecté en tant que{" "}
               <span className="font-bold not-italic">{user.username}</span>
             </p>
           ) : (
-            <p className="text-indigo-400 opacity-70 text-sm mr-4 font-medium">
+            <p className="hidden sm:block text-indigo-400 opacity-70 text-xs sm:text-sm font-medium">
               Se connecter
             </p>
           )}
@@ -725,7 +792,7 @@ function App() {
             src={user.avatar_url || default_user}
             alt="Avatar"
             onClick={() => setShowLoginModal(true)}
-            className="w-10 h-10 rounded-full cursor-pointer hover:opacity-80 transition-opacity "
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
             title={
               user.username
                 ? `Connecté en tant que ${user.username}`
@@ -736,20 +803,57 @@ function App() {
       </header>
 
       {/* ============================================
-          CONTENU PRINCIPAL : 3 colonnes
+          CONTENU PRINCIPAL : Layout responsive
           ============================================ */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* ============================================
-            COLONNE GAUCHE : Liste des clips
+            SIDEBAR GAUCHE : Liste des clips
             ============================================ */}
-        <aside className="w-80 bg-gray-800 flex flex-col overflow-hidden">
+        <aside
+          className={`
+            fixed lg:static inset-y-0 left-0 z-40
+            w-72 sm:w-80 lg:w-80
+            bg-gray-800 flex flex-col overflow-hidden
+            transform transition-transform duration-300 ease-in-out
+            ${showMobileSidebar ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          `}
+        >
+          {/* Overlay pour fermer la sidebar sur mobile */}
+          {showMobileSidebar && (
+            <div
+              className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
+              onClick={() => setShowMobileSidebar(false)}
+            />
+          )}
+
+          {/* Bouton de fermeture pour mobile */}
+          <button
+            onClick={() => setShowMobileSidebar(false)}
+            className="lg:hidden absolute top-2 right-2 z-50 text-white p-2 hover:bg-gray-700 rounded"
+            aria-label="Fermer"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+
           {/* Barre d'actions : Proposer et Filtrer */}
           <div className="p-2 flex flex-col gap-2 bg-gray-800 border-b">
             <div className="flex gap-2">
               <button
                 onClick={handleProposeClick}
                 disabled={!user.username}
-                className={`flex-1 px-3 py-2 rounded font-medium ${
+                className={`flex-1 px-2 sm:px-3 py-2 rounded font-medium text-xs sm:text-sm ${
                   user.username
                     ? "bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
                     : "bg-gray-500 text-gray-300 cursor-not-allowed"
@@ -765,7 +869,7 @@ function App() {
 
               <button
                 onClick={() => setShowFilterModal(true)}
-                className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium"
+                className="px-2 sm:px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium text-xs sm:text-sm"
               >
                 🔎 Filtrer
               </button>
@@ -791,7 +895,7 @@ function App() {
             <button
               onClick={toggleArchiveView}
               disabled={!user.username}
-              className={`w-full px-3 py-2 rounded font-medium ${
+              className={`w-full px-2 sm:px-3 py-2 rounded font-medium text-xs sm:text-sm ${
                 user.username
                   ? showArchived
                     ? "bg-blue-600 text-white hover:bg-blue-700"
@@ -814,9 +918,15 @@ function App() {
         {/* ============================================
             COLONNE CENTRALE : Viewer ou Form
             ============================================ */}
-        <main className="flex-1 bg-gray-700 p-4 overflow-auto">
+        <main className="flex-1 bg-gray-700 p-2 sm:p-4 overflow-auto">
           {!user.username ? (
-            <div></div>
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center text-white">
+                <p className="text-lg sm:text-xl mb-4">
+                  Connectez-vous pour accéder aux clips
+                </p>
+              </div>
+            </div>
           ) : (
             <>
               {/* Affiche le formulaire si showForm est true, sinon le viewer */}
@@ -852,7 +962,7 @@ function App() {
         {/* ============================================
             COLONNE DROITE : Image et lien Twitch du clip
             ============================================ */}
-        <div className="w-[700px] bg-gray-700 p-4 flex flex-col items-end gap-4">
+        <div className="hidden xl:flex xl:w-[500px] 2xl:w-[700px] bg-gray-700 p-4 flex-col items-end gap-4">
           {!user.username ? (
             <div></div>
           ) : (
@@ -885,12 +995,12 @@ function App() {
 
                   {/* Lien vers Twitch (on le garde au cas où) */}
                   {selectedClip.link && (
-                    <div className="flex flex-row gap-3">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
                       <a
                         href={selectedClip.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
+                        className="text-xs sm:text-sm px-3 sm:px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium text-center"
                       >
                         🎥 Voir sur Twitch
                       </a>
@@ -901,7 +1011,7 @@ function App() {
                             selectedClip.subject
                           )
                         }
-                        className="text-sm px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 font-medium"
+                        className="text-xs sm:text-sm px-3 sm:px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 font-medium"
                       >
                         📥 Télécharger
                       </button>
@@ -912,6 +1022,60 @@ function App() {
             </>
           )}
         </div>
+
+        {/* Section vidéo mobile - Affichée en bas sur mobile/tablette */}
+        {user.username && selectedClip && (
+          <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-600 z-30">
+            <div className="p-2 sm:p-3">
+              {selectedClip.embed_url ? (
+                <div className="w-full aspect-video rounded-lg shadow-lg overflow-hidden mb-2">
+                  <iframe
+                    src={getTwitchEmbedSrc(selectedClip.embed_url)}
+                    title="Twitch clip"
+                    allowFullScreen
+                    frameBorder="0"
+                    scrolling="no"
+                    className="w-full h-full"
+                  />
+                </div>
+              ) : (
+                <img
+                  src={
+                    selectedClip.image?.trim()
+                      ? selectedClip.image
+                      : "offline-screen_socials.png"
+                  }
+                  alt="Illustration du clip"
+                  className="w-full h-auto rounded-lg shadow-lg mb-2"
+                />
+              )}
+
+              {selectedClip.link && (
+                <div className="flex gap-2">
+                  <a
+                    href={selectedClip.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 text-xs sm:text-sm px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium text-center"
+                  >
+                    🎥 Twitch
+                  </a>
+                  <button
+                    onClick={() =>
+                      handleDownloadClip(
+                        selectedClip.clip_id,
+                        selectedClip.subject
+                      )
+                    }
+                    className="flex-1 text-xs sm:text-sm px-3 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 font-medium"
+                  >
+                    📥 DL
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ============================================
@@ -925,9 +1089,12 @@ function App() {
           selectedTags={selectedTags}
           selectedStatuses={selectedStatuses}
           selectedEditStatuses={selectedEditStatuses}
+          selectedVoteStatus={selectedVoteStatus}
           onToggleTag={toggleTag}
           onToggleStatus={toggleStatus}
           onToggleEditStatus={toggleEditStatus}
+          onToggleVoteStatus={toggleVoteStatus}
+          onClearFilters={clearAllFilters}
           onClose={() => setShowFilterModal(false)}
         />
       )}

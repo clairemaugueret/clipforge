@@ -1,6 +1,10 @@
 import { formatHumanDate } from "./utils/date";
+import {
+  translateStatus,
+  translateEditStatus,
+  getStatusColor,
+} from "./utils/translations";
 import default_user from "./images/default_user.png";
-import { useSelector, useDispatch } from "react-redux";
 
 /**
  * Composant affichant la liste des clips dans la barre latérale
@@ -23,7 +27,7 @@ function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
   const experts = users.filter((u) => u.role === "EXPERT");
 
   // ============================================
-  // FONCTION UTILITAIRE : COULEUR DU VOTE
+  // FONCTIONS UTILITAIRES
   // ============================================
 
   /**
@@ -34,12 +38,20 @@ function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
    */
   const borderColor = (vote) => {
     return vote === "OK"
-      ? "ring-3 ring-green-500" // Vote positif = vert
+      ? "ring-2 ring-green-500" // Vote positif = vert
       : vote === "KO"
-        ? "ring-3 ring-red-600" // Vote négatif = rouge
+        ? "ring-2 ring-red-600" // Vote négatif = rouge
         : vote === "toReview"
-          ? "ring-3 ring-orange-500" // À revoir = orange
-          : "ring-3 ring-gray-500"; // Pas encore voté = gris
+          ? "ring-2 ring-orange-500" // À revoir = orange
+          : "ring-2 ring-gray-500"; // Pas encore voté = gris
+  };
+
+  /**
+   * Détermine le statut d'édition à afficher pour un clip
+   * Utilise la fonction translateEditStatus du fichier translations
+   */
+  const getEditStatusLabel = (clip) => {
+    return translateEditStatus(clip);
   };
 
   // ============================================
@@ -47,84 +59,135 @@ function ClipList({ clips, onSelect, selectedClipId, users = [] }) {
   // ============================================
 
   return (
-    <ul className="divide-y">
+    <ul className="divide-y divide-gray-700">
       {clips.map((clip) => (
-        <div
+        <li
           key={clip.clip_id}
           onClick={() => onSelect(clip.clip_id)} // Sélectionne le clip au clic
-          className={`px-4 py-3 cursor-pointer hover:bg-gray-600 ${
-            selectedClipId === clip.clip_id ? "bg-gray-600" : "" // Highlight si sélectionné
+          className={`px-2 sm:px-3 py-2 sm:py-2.5 cursor-pointer transition-colors border-l-4 ${
+            clip.status === "READY"
+              ? "border-green-500 bg-green-900/20"
+              : "border-transparent"
+          } ${
+            selectedClipId === clip.clip_id
+              ? "bg-gray-600"
+              : "hover:bg-gray-700 active:bg-gray-600"
           }`}
         >
-          <div className="flex justify-between items-start">
+          {/* Layout principal */}
+          <div className="flex items-start justify-between gap-2">
             {/* ============================================
-                PARTIE GAUCHE : Titre et auteur
+                PARTIE GAUCHE : Titre, auteur et infos
                 ============================================ */}
-            <div>
-              {/* Titre du clip avec indicateur brouillon si nécessaire */}
-              <h3 className="text-white font-semibold flex items-center gap-2">
-                {clip.subject}
+            <div className="flex-1 min-w-0">
+              {/* Titre du clip avec indicateur brouillon */}
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <h3
+                  className={`font-medium text-xs sm:text-sm truncate ${
+                    clip.status === "READY"
+                      ? "text-green-400 font-bold"
+                      : "text-white"
+                  }`}
+                >
+                  {clip.subject}
+                </h3>
                 {clip.draft && (
-                  <span className="text-xs text-yellow-500 px-2 py-0.5 rounded">
-                    Brouillon
+                  <span className="text-[9px] sm:text-[10px] bg-yellow-600 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-semibold">
+                    DRAFT
                   </span>
                 )}
-              </h3>
+                {clip.status === "READY" && (
+                  <span className="text-[9px] sm:text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-semibold animate-pulse">
+                    ✓ PRÊT
+                  </span>
+                )}
+              </div>
 
-              {/* Nom de l'auteur */}
-              <p className="text-xs text-gray-400">
+              {/* Auteur */}
+              <p className="text-[10px] sm:text-xs text-gray-400 truncate mb-1">
                 par {clip.authorId?.username || "Inconnu"}
               </p>
 
-              <div className="flex justify-between items-center">
-                {/* Status - toujours affiché */}
+              {/* Ligne d'infos : Status + Edition + Date */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] sm:text-[10px] text-gray-500">
+                {/* Status */}
                 {clip.status && (
-                  <p className="text-xs text-gray-500 italic mt-1">
-                    Statut: {clip.status}
-                  </p>
+                  <span className="flex items-center gap-1">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        clip.status === "READY"
+                          ? "bg-green-500"
+                          : clip.status === "DISCARDED"
+                            ? "bg-red-500"
+                            : clip.status === "PUBLISHED"
+                              ? "bg-blue-500"
+                              : clip.status === "ARCHIVED"
+                                ? "bg-gray-500"
+                                : "bg-yellow-500"
+                      }`}
+                    ></span>
+                    {translateStatus(clip.status)}
+                  </span>
                 )}
 
-                {/* Edition - affiché si editable = true OU s'il y a edit_progress */}
-                {(clip.editable || clip.edit_progress) && (
-                  <p className="text-xs text-gray-500 italic">
-                    Édition: {clip.edit_progress || "EDITABLE"}
-                  </p>
+                {/* Séparateur si status existe */}
+                {clip.status && (clip.editable || clip.edit_progress) && (
+                  <span className="text-gray-600">•</span>
                 )}
+
+                {/* Edition */}
+                {(clip.editable || clip.edit_progress) &&
+                  getEditStatusLabel(clip) && (
+                    <span className="flex items-center gap-1">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          clip.edit_progress === "IN_PROGRESS"
+                            ? "bg-yellow-500"
+                            : clip.edit_progress === "TERMINATED"
+                              ? "bg-lime-500"
+                              : "bg-orange-500"
+                        }`}
+                      ></span>
+                      {getEditStatusLabel(clip)}
+                    </span>
+                  )}
+
+                {/* Séparateur avant la date */}
+                {(clip.status || clip.editable || clip.edit_progress) && (
+                  <span className="text-gray-600">•</span>
+                )}
+
+                {/* Date */}
+                <span className="text-gray-400">
+                  {formatHumanDate(clip.createdAt)}
+                </span>
               </div>
             </div>
 
             {/* ============================================
-                PARTIE DROITE : Date et avatars des experts avec votes
+                PARTIE DROITE : Avatars des experts
                 ============================================ */}
-            <div className="flex flex-col items-end gap-1">
-              {/* Date de création du clip formatée de manière lisible */}
-              <span className="text-xs text-gray-400 whitespace-nowrap">
-                {formatHumanDate(clip.createdAt)}
-              </span>
+            <div className="flex gap-1 sm:gap-1.5 flex-shrink-0">
+              {experts.map((expert) => {
+                // Trouve le vote de cet expert dans clip.votes
+                const expertVote = Array.isArray(clip.votes)
+                  ? clip.votes.find((v) => v.userName === expert.username)
+                  : undefined;
+                const vote = expertVote?.result;
 
-              {/* Avatars des experts avec indicateur de vote coloré */}
-              <div className="flex gap-2 pr-2">
-                {experts.map((expert) => {
-                  // Trouve le vote de cet expert dans clip.votes
-                  const expertVote = Array.isArray(clip.votes)
-                    ? clip.votes.find((v) => v.userName === expert.username)
-                    : undefined;
-                  const vote = expertVote?.result;
-
-                  return (
-                    <img
-                      key={expert.username}
-                      src={expert.avatar_url || default_user} // Avatar ou image par défaut
-                      alt={expert.username}
-                      title={expert.username} // Tooltip au survol
-                      className={`w-6 h-6 rounded-full ring-2 ${borderColor(vote)}`}
-                    />
-                  );
-                })}
-              </div>
+                return (
+                  <img
+                    key={expert.username}
+                    src={expert.avatar_url || default_user}
+                    alt={expert.username}
+                    title={`${expert.username} - ${vote || "Pas encore voté"}`}
+                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${borderColor(vote)}`}
+                  />
+                );
+              })}
             </div>
           </div>
-        </div>
+        </li>
       ))}
     </ul>
   );

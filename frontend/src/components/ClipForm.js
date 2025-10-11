@@ -221,14 +221,17 @@ function ClipForm({
   // RENDU DU FORMULAIRE
   // ============================================
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-      <h2 className="text-xl font-bold text-gray-100">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 w-full max-w-xl mx-auto px-4 sm:px-6 lg:px-8"
+    >
+      <h2 className="text-lg sm:text-xl font-bold text-gray-100">
         {isEditMode ? "Modifier le clip" : "Proposer un clip"}
       </h2>
 
       {/* CHAMP : URL DU CLIP */}
       <div>
-        <label className="block mb-1 text-sm text-gray-100 font-medium">
+        <label className="block mb-1 text-xs sm:text-sm text-gray-100 font-medium">
           Lien du clip
         </label>
         <input
@@ -238,7 +241,7 @@ function ClipForm({
           onBlur={emitChange}
           required
           disabled={isEditMode} // ⭐ Désactive en mode édition
-          className={`w-full p-2 border rounded ${
+          className={`w-full p-2 text-sm sm:text-base border rounded ${
             isEditMode ? "bg-gray-600 cursor-not-allowed" : ""
           }`}
           placeholder="https://clips.twitch.tv/...   OU  https://www.twitch.tv/evoxia/clip/..."
@@ -246,21 +249,23 @@ function ClipForm({
 
         {/* Indicateur en mode édition */}
         {isEditMode && (
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-400 mt-1">
             ℹ️ Le lien ne peut pas être modifié
           </p>
         )}
 
         {/* Indicateur de chargement (uniquement en mode création) */}
         {!isEditMode && isLoadingTwitchInfo && (
-          <p className="text-sm text-blue-400 mt-1">
+          <p className="text-xs sm:text-sm text-blue-400 mt-1">
             🔄 Récupération des infos du clip...
           </p>
         )}
 
         {/* Affichage des erreurs (uniquement en mode création) */}
         {!isEditMode && twitchInfoError && (
-          <p className="text-sm text-red-400 mt-1">⚠️ {twitchInfoError}</p>
+          <p className="text-xs sm:text-sm text-red-400 mt-1">
+            ⚠️ {twitchInfoError}
+          </p>
         )}
 
         {/* Confirmation du chargement réussi (uniquement en mode création) */}
@@ -268,7 +273,7 @@ function ClipForm({
           !isLoadingTwitchInfo &&
           !twitchInfoError &&
           clipImage && (
-            <p className="text-sm text-green-400 mt-1">
+            <p className="text-xs sm:text-sm text-green-400 mt-1">
               ✅ Infos du clip récupérées automatiquement
             </p>
           )}
@@ -276,7 +281,7 @@ function ClipForm({
 
       {/* CHAMP : TITRE DU CLIP */}
       <div>
-        <label className="block mb-1 text-sm text-gray-100 font-medium">
+        <label className="block mb-1 text-xs sm:text-sm text-gray-100 font-medium">
           Titre
         </label>
         <input
@@ -285,7 +290,7 @@ function ClipForm({
           onChange={(e) => setTitle(e.target.value)}
           onBlur={emitChange}
           required
-          className="w-full p-2 border rounded"
+          className="w-full p-2 text-sm sm:text-base border rounded"
           placeholder={
             isEditMode
               ? "Modifier le titre"
@@ -296,16 +301,16 @@ function ClipForm({
 
       {/* SECTION : SÉLECTION DES TAGS */}
       <div>
-        <label className="block mb-1 text-sm text-gray-100 font-medium">
+        <label className="block mb-1 text-xs sm:text-sm text-gray-100 font-medium">
           Tags
         </label>
-        <div className="flex flex-wrap gap-2 mb-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
           {allTags.map((tag) => (
             <button
               type="button"
               key={tag}
               onClick={() => toggleTag(tag)}
-              className={`px-2 py-1 rounded text-sm border ${
+              className={`px-2 py-1 rounded text-xs sm:text-sm border ${
                 tags.includes(tag)
                   ? "bg-indigo-800 text-white border-indigo-500"
                   : "bg-white text-gray-700 border-gray-300"
@@ -316,18 +321,18 @@ function ClipForm({
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             placeholder="Nouveau tag"
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
-            className="flex-1 p-2 border rounded"
+            className="flex-1 p-2 text-sm sm:text-base border rounded"
           />
           <button
             type="button"
             onClick={handleAddTag}
-            className="px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-700"
+            className="px-3 py-2 text-sm sm:text-base bg-indigo-500 text-white rounded hover:bg-indigo-700 whitespace-nowrap"
           >
             Ajouter
           </button>
@@ -345,15 +350,16 @@ function ClipForm({
             setEditable(newValue);
             emitChange();
           }}
+          className="w-4 h-4"
         />
-        <label htmlFor="editable" className="text-sm">
+        <label htmlFor="editable" className="text-xs sm:text-sm">
           À éditer
         </label>
       </div>
 
       {/* CHAMP : COMMENTAIRE */}
       <div>
-        <label className="block mb-1 text-sm text-gray-100 font-medium">
+        <label className="block mb-1 text-xs sm:text-sm text-gray-100 font-medium">
           Commentaire {isEditMode && "(optionnel)"}
         </label>
         <textarea
@@ -361,7 +367,7 @@ function ClipForm({
           onChange={(e) => setComment(e.target.value)}
           onBlur={emitChange}
           rows="3"
-          className="w-full p-2 border rounded"
+          className="w-full p-2 text-sm sm:text-base border rounded"
           placeholder={
             isEditMode
               ? "Ajouter un commentaire sur cette modification..."
@@ -371,11 +377,11 @@ function ClipForm({
       </div>
 
       {/* BOUTONS D'ACTION */}
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <button
           type="submit"
           disabled={!isEditMode && isLoadingTwitchInfo}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
           {!isEditMode && isLoadingTwitchInfo
             ? "Chargement..."
@@ -386,7 +392,7 @@ function ClipForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+          className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
         >
           Annuler
         </button>

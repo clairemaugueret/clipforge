@@ -1,33 +1,32 @@
+import {
+  getAvailableStatuses,
+  getAvailableEditStatuses,
+  getStatusColor,
+  getEditStatusColor,
+} from "../utils/translations";
+
 function FilterModal({
   allTags,
   selectedTags,
   selectedStatuses,
   selectedEditStatuses,
+  selectedVoteStatus,
   onToggleTag,
   onToggleStatus,
   onToggleEditStatus,
+  onToggleVoteStatus,
+  onClearFilters,
   onClose,
 }) {
-  // Liste des statuts disponibles (hors ARCHIVED)
-  const availableStatuses = ["PROPOSED", "READY", "DISCARDED", "PUBLISHED"];
+  // Récupère les statuts et leurs traductions depuis le fichier utils
+  const availableStatuses = getAvailableStatuses();
+  const availableEditStatuses = getAvailableEditStatuses();
 
-  // Liste des statuts d'édition disponibles
-  const availableEditStatuses = ["EDITABLE", "IN_PROGRESS", "TERMINATED"];
-
-  // Couleurs pour chaque statut
-  const statusColors = {
-    PROPOSED: "bg-yellow-500 border-yellow-500",
-    READY: "bg-green-600 border-green-600",
-    DISCARDED: "bg-red-600 border-red-600",
-    PUBLISHED: "bg-blue-600 border-blue-600",
-  };
-
-  // Couleurs pour chaque statut d'édition
-  const editStatusColors = {
-    EDITABLE: "bg-orange-500 border-orange-500",
-    IN_PROGRESS: "bg-yellow-500 border-yellow-500",
-    TERMINATED: "bg-lime-600 border-lime-600",
-  };
+  // Options de filtre de vote
+  const voteOptions = [
+    { key: "VOTED", label: "Déjà voté" },
+    { key: "NOT_VOTED", label: "Pas encore voté" },
+  ];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
@@ -74,46 +73,74 @@ function FilterModal({
             Filtrer par statut
           </h3>
           <div className="flex flex-wrap gap-2">
-            {availableStatuses.map((status) => (
+            {availableStatuses.map(({ key, label }) => (
               <button
-                key={status}
-                onClick={() => onToggleStatus(status)}
+                key={key}
+                onClick={() => onToggleStatus(key)}
                 className={`px-3 py-1 rounded text-sm border transition-colors ${
-                  selectedStatuses.includes(status)
-                    ? `${statusColors[status]} text-white`
+                  selectedStatuses.includes(key)
+                    ? `${getStatusColor(key)} text-white`
                     : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
                 }`}
               >
-                {status}
+                {label}
               </button>
             ))}
           </div>
         </div>
 
         {/* SECTION : FILTRAGE PAR STATUT D'ÉDITION */}
-        <div className="mb-4">
+        <div className="mb-6">
           <h3 className="text-sm font-semibold mb-3 text-gray-700">
             Filtrer par édition
           </h3>
           <div className="flex flex-wrap gap-2">
-            {availableEditStatuses.map((editStatus) => (
+            {availableEditStatuses.map(({ key, label }) => (
               <button
-                key={editStatus}
-                onClick={() => onToggleEditStatus(editStatus)}
+                key={key}
+                onClick={() => onToggleEditStatus(key)}
                 className={`px-3 py-1 rounded text-sm border transition-colors ${
-                  selectedEditStatuses.includes(editStatus)
-                    ? `${editStatusColors[editStatus]} text-white`
+                  selectedEditStatuses.includes(key)
+                    ? `${getEditStatusColor(key)} text-white`
                     : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
                 }`}
               >
-                {editStatus}
+                {label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* BOUTON DE FERMETURE */}
-        <div className="flex justify-end mt-6">
+        {/* SECTION : FILTRAGE PAR VOTE */}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700">
+            Filtrer par vote
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {voteOptions.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => onToggleVoteStatus(key)}
+                className={`px-3 py-1 rounded text-sm border transition-colors ${
+                  selectedVoteStatus.includes(key)
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-emerald-400"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* BOUTONS DE CONTRÔLE */}
+        <div className="flex justify-between gap-2 mt-6">
+          <button
+            onClick={onClearFilters}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+          >
+            🗑️ Effacer les filtres
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"

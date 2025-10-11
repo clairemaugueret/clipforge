@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatHumanDate } from "./utils/date";
+import { translateStatus, translateEditStatus } from "./utils/translations";
 import ExpertVoteModale from "./utils/vote";
 import EditClaimModal from "./utils/EditClaimModal";
 import ConfirmDeleteModal from "./utils/ConfirmDeleteModal";
@@ -17,7 +18,7 @@ import default_user from "./images/default_user.png";
  * @param {Function} onDeleteClip - Callback pour supprimer le clip
  * @param {Function} onClipUpdate - Callback pour mettre à jour le clip dans App.js
  */
-export default function ClipViewer({
+function ClipViewer({
   clip,
   users = [],
   user,
@@ -233,24 +234,24 @@ export default function ClipViewer({
       {/* ============================================
           SECTION SUPÉRIEURE : Informations du clip (scrollable)
           ============================================ */}
-      <div className="overflow-auto px-2">
+      <div className="overflow-auto px-2 sm:px-4">
         {/* Titre du clip */}
-        <h2 className="text-3xl mb-2 font-bold text-gray-200">
+        <h2 className="text-2xl sm:text-3xl mb-2 font-bold text-gray-200">
           {clip.subject}
         </h2>
 
         {/* Métadonnées : auteur et date */}
-        <p className="text-sm mb-6 text-gray-400">
-          Par {clip.authorId.username || "Inconnu"} —{" "}
+        <p className="text-xs sm:text-sm mb-4 sm:mb-6 text-gray-400">
+          Par {clip.authorId.username || "Inconnu"} •{" "}
           {new Date(clip.createdAt).toLocaleDateString("fr-FR")}
         </p>
 
         {/* Tags du clip */}
-        <div className="flex flex-wrap mb-4 gap-2 my-2">
+        <div className="flex flex-wrap mb-3 sm:mb-4 gap-1.5 sm:gap-2 my-2">
           {clip.tags.map((tag) => (
             <span
               key={tag}
-              className="px-2 py-1 text-sm bg-gray-200 rounded-full text-gray-700"
+              className="px-2 py-0.5 sm:py-1 text-xs sm:text-sm bg-gray-200 rounded-full text-gray-700"
             >
               #{tag}
             </span>
@@ -259,9 +260,9 @@ export default function ClipViewer({
 
         {/* Affichage du statut si différent de PROPOSED avec bouton publication */}
         {clip.status && clip.status !== "PROPOSED" && (
-          <div className="mb-6 flex items-center gap-3">
+          <div className="mb-4 sm:mb-6 flex flex-wrap items-center gap-2 sm:gap-3">
             <span
-              className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+              className={`inline-block px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
                 clip.status === "READY"
                   ? "bg-green-600 text-white"
                   : clip.status === "DISCARDED"
@@ -273,16 +274,16 @@ export default function ClipViewer({
                         : "bg-yellow-600 text-white"
               }`}
             >
-              Statut : {clip.status}
+              Statut : {translateStatus(clip.status)}
             </span>
 
             {/* Bouton de publication si statut READY */}
             {clip.status === "READY" && (
               <>
-                <div>🔜</div>
+                <div className="hidden sm:block">📜</div>
                 <button
                   onClick={handlePublished}
-                  className="text-sm px-3 py-1 border-2 border-green-600 text-white bg-transparent rounded font-medium hover:bg-green-600 active:bg-green-700 transition-colors"
+                  className="text-xs sm:text-sm px-2 sm:px-3 py-1 border-2 border-green-600 text-white bg-transparent rounded font-medium hover:bg-green-600 active:bg-green-700 transition-colors"
                 >
                   📤 Clip publié sur TikTok
                 </button>
@@ -292,128 +293,114 @@ export default function ClipViewer({
         )}
 
         {/* ============================================
-            BARRE D'ACTIONS : 3 colonnes
+            BARRE D'ACTIONS : Layout ultra-responsive
             ============================================ */}
-        <div className="grid auto-cols-auto grid-flow-col items-center gap-4">
-          {/* COLONNE 1 : Boutons Modifier et Supprimer */}
-          <div className="flex justify-start gap-2">
-            <button
-              onClick={onModifyClip}
-              disabled={user.username !== clip.authorId.username}
-              className={`text-sm px-3 py-1 text-white rounded font-medium ${
-                user.username === clip.authorId.username
-                  ? "bg-gray-500 hover:bg-gray-500 cursor-pointer "
-                  : "bg-gray-600 cursor-not-allowed opacity-75"
-              }`}
-              title={
-                user.username === clip.authorId.username
-                  ? "Clique pour modifier les infos du clip"
-                  : "Seul l'auteur de la proposition peut la modifier"
-              }
-            >
-              Modifier
-            </button>
+        <div className="flex flex-col gap-2 sm:gap-3 mb-4">
+          {/* LIGNE 1 : Boutons d'action (Modifier/Supprimer) + Voter sur mobile */}
+          <div className="flex flex-wrap gap-2">
+            {/* Boutons Modifier et Supprimer - affichés uniquement pour l'auteur */}
+            {user.username === clip.authorId.username && (
+              <>
+                <button
+                  onClick={onModifyClip}
+                  className="text-xs px-2 py-1.5 text-white rounded font-medium flex-1 min-w-[80px] bg-gray-500 hover:bg-gray-600 cursor-pointer"
+                  title="Clique pour modifier les infos du clip"
+                >
+                  ✏️ Modifier
+                </button>
 
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              disabled={user.username !== clip.authorId.username}
-              className={`text-sm px-3 py-1 text-white rounded font-medium ${
-                user.username === clip.authorId.username
-                  ? "bg-red-700 hover:bg-red-800 cursor-pointer "
-                  : "bg-red-700 cursor-not-allowed opacity-75"
-              }`}
-              title={
-                user.username === clip.authorId.username
-                  ? "Clique pour supprimer cette proposition"
-                  : "Seul l'auteur de la proposition peut la supprimer"
-              }
-            >
-              Supprimer
-            </button>
-          </div>
-
-          {/* COLONNE 2 : Statut d'édition */}
-          <div className="flex justify-center items-center gap-2">
-            {clip.editable && !clip.edit_progress && (
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600 font-medium"
-              >
-                À éditer → Prendre en charge l'édition
-              </button>
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="text-xs px-2 py-1.5 text-white rounded font-medium flex-1 min-w-[80px] bg-red-700 hover:bg-red-800 cursor-pointer"
+                  title="Clique pour supprimer cette proposition"
+                >
+                  🗑️ Supprimer
+                </button>
+              </>
             )}
 
-            {clip.edit_progress === "IN_PROGRESS" && clip.editorId && (
-              <button
-                onClick={handleEditEnd}
-                disabled={user.username !== clip.editorId.username}
-                className={`text-sm px-3 py-1 text-white rounded font-medium ${
-                  user.username === clip.editorId.username
-                    ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer "
-                    : "bg-yellow-600 cursor-not-allowed opacity-75"
-                }`}
-                title={
-                  user.username === clip.editorId.username
-                    ? "Clique pour terminer l'édition"
-                    : "Seul l'éditeur peut terminer l'édition"
-                }
-              >
-                <span>En cours d'édition par {clip.editorId.username}</span>
-              </button>
-            )}
-
-            {clip.edit_progress === "TERMINATED" && clip.editorId && (
-              <div className="text-sm px-3 py-1 bg-lime-600 rounded font-medium flex items-center gap-2">
-                <span>Édition terminée par {clip.editorId.username}</span>
-              </div>
-            )}
-
-            {/* Modale de confirmation pour prendre en charge l'édition */}
-            {showEditModal && (
-              <EditClaimModal
-                onCancel={() => setShowEditModal(false)}
-                onConfirm={handleEditStart}
-              />
-            )}
-          </div>
-
-          {/* COLONNE 3 : Bouton Voter et avatars de tous les utilisateurs */}
-          <div className="flex justify-end items-center gap-3 h-full">
+            {/* Bouton Voter - visible sur mobile, caché sur desktop */}
             <button
               onClick={() => setShowVoteModal(true)}
-              className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
+              className={`lg:hidden text-xs px-3 py-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium ${
+                user.username === clip.authorId.username
+                  ? "flex-1 min-w-[80px]"
+                  : "w-full"
+              }`}
             >
-              Voter
+              🗳️ Voter
             </button>
+          </div>
 
-            {/* Section des votes */}
-            <div className="flex flex-col gap-3 mb-2 ">
-              {/* Avatars des EXPERTS avec indicateur de vote */}
-              <div className="flex gap-3">
-                {experts.map((expert) => {
-                  // Trouve le vote de cet expert dans clip.votes
-                  const expertVote = Array.isArray(clip.votes)
-                    ? clip.votes.find((v) => v.userName === expert.username)
-                    : undefined;
-                  const vote = expertVote?.result;
+          {/* LIGNE 2 : Statut d'édition (si applicable) */}
+          {(clip.editable || clip.edit_progress) && (
+            <div className="flex items-center">
+              {clip.editable && !clip.edit_progress && (
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="text-xs px-2 py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 font-medium w-full"
+                >
+                  🎬 {translateEditStatus(clip)} → Prendre en charge ?
+                </button>
+              )}
 
-                  return (
-                    <img
-                      key={expert.username}
-                      src={expert.avatar_url || default_user}
-                      alt={expert.username}
-                      title={`${expert.username} (EXPERT)`}
-                      className={`w-14 h-14 rounded-full ring-2 ${borderColor(vote)}`}
-                    />
-                  );
-                })}
-              </div>
+              {clip.edit_progress === "IN_PROGRESS" && clip.editorId && (
+                <button
+                  onClick={handleEditEnd}
+                  disabled={user.username !== clip.editorId.username}
+                  className={`text-xs px-2 py-1.5 text-white rounded font-medium w-full ${
+                    user.username === clip.editorId.username
+                      ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer"
+                      : "bg-yellow-600 cursor-not-allowed opacity-75"
+                  }`}
+                  title={
+                    user.username === clip.editorId.username
+                      ? "Clique pour terminer l'édition"
+                      : "Seul l'éditeur peut terminer l'édition"
+                  }
+                >
+                  ⏳ {translateEditStatus(clip)} par {clip.editorId.username}
+                </button>
+              )}
 
-              {/* Avatars des USERS avec indicateur de vote */}
+              {clip.edit_progress === "TERMINATED" && clip.editorId && (
+                <div className="text-xs px-2 py-1.5 bg-lime-600 text-white rounded font-medium w-full text-center">
+                  ✅ {translateEditStatus(clip)} par {clip.editorId.username}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* LIGNE 3 : Avatars des votants + Bouton Voter (desktop uniquement) */}
+          <div className="flex items-center justify-between gap-3">
+            {/* Section avatars */}
+            <div className="flex-1 flex flex-col gap-2">
+              {/* Avatars des EXPERTS */}
+              {experts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  {experts.map((expert) => {
+                    const expertVote = Array.isArray(clip.votes)
+                      ? clip.votes.find((v) => v.userName === expert.username)
+                      : undefined;
+                    const vote = expertVote?.result;
+
+                    return (
+                      <img
+                        key={expert.username}
+                        src={expert.avatar_url || default_user}
+                        alt={expert.username}
+                        title={`${expert.username} (EXPERT)`}
+                        className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full ${borderColor(vote)}`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Avatars des USERS */}
               {regularUsers.length > 0 && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
                   {regularUsers.map((regularUser) => {
-                    // Trouve le vote de cet utilisateur dans clip.votes
                     const userVote = Array.isArray(clip.votes)
                       ? clip.votes.find(
                           (v) => v.userName === regularUser.username
@@ -427,43 +414,70 @@ export default function ClipViewer({
                         src={regularUser.avatar_url || default_user}
                         alt={regularUser.username}
                         title={`${regularUser.username} (USER)`}
-                        className={`w-10 h-10 rounded-full ring-2 ${borderColor(vote)}`}
+                        className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full ${borderColor(vote)}`}
                       />
                     );
                   })}
                 </div>
               )}
             </div>
+
+            {/* Bouton Voter - visible uniquement sur desktop */}
+            <button
+              onClick={() => setShowVoteModal(true)}
+              className="hidden lg:block text-xs px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium whitespace-nowrap"
+            >
+              🗳️ Voter
+            </button>
           </div>
+
+          {/* Modale de confirmation pour prendre en charge l'édition */}
+          {showEditModal && (
+            <EditClaimModal
+              onCancel={() => setShowEditModal(false)}
+              onConfirm={handleEditStart}
+            />
+          )}
         </div>
       </div>
 
       {/* ============================================
-          SECTION INFÉRIEURE : Commentaires (fixe en bas)
+          SECTION INFÉRIEURE : Commentaires (compact et responsive)
           ============================================ */}
-      <div className="mt-auto">
-        <h3 className="text-lg font-semibold text-gray-200 mb-1">
-          Commentaires
+      <div className="mt-auto px-2 sm:px-4 pb-2">
+        <h3 className="text-xs sm:text-sm font-semibold text-gray-200 mb-1 flex items-center gap-1.5">
+          💬 Commentaires
+          <span className="text-[10px] sm:text-xs text-gray-400 font-normal">
+            ({clip.comments?.length || 0})
+          </span>
         </h3>
 
         {/* Zone scrollable des commentaires existants */}
-        <div className="h-[375px] overflow-y-auto bg-gray-900 p-4 rounded-md shadow-inner border-t border-gray-700 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+        <div className="h-[120px] sm:h-[140px] md:h-[160px] lg:h-[180px] overflow-y-auto bg-gray-900 p-1.5 sm:p-2 rounded-md shadow-inner border border-gray-700 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
           {(clip.comments?.length ?? 0) === 0 ? (
             // Message si aucun commentaire
-            <p className="text-gray-400 text-sm">Aucun commentaire encore.</p>
+            <p className="text-gray-500 text-[11px] sm:text-xs italic text-center py-4">
+              Aucun commentaire pour le moment
+            </p>
           ) : (
             // Liste des commentaires
-            <ul className="space-y-2 mb-4">
+            <ul className="space-y-1 sm:space-y-1.5">
               {clip.comments.map((c, i) => (
                 <li
                   key={i}
-                  className="text-sm bg-gray-100 p-2 rounded text-gray-800"
+                  className="text-[11px] sm:text-xs bg-gray-100 p-1.5 rounded text-gray-800"
                 >
                   {/* Texte du commentaire */}
-                  <div>{c.text}</div>
+                  <div className="break-words leading-tight mb-0.5">
+                    {c.text}
+                  </div>
                   {/* Métadonnées du commentaire */}
-                  <div className="text-gray-500 text-xs">
-                    — {c.userName}, {formatHumanDate(c.createdAt)}
+                  <div className="text-gray-500 text-[9px] sm:text-[10px] flex items-center gap-1">
+                    <span className="font-medium">{c.userName}</span>
+                    <span className="opacity-60">•</span>
+                    <span className="opacity-75">
+                      {formatHumanDate(c.createdAt)}
+                    </span>
                   </div>
                 </li>
               ))}
@@ -472,7 +486,7 @@ export default function ClipViewer({
         </div>
 
         {/* Champ d'ajout de commentaire */}
-        <div className="mt-4 flex gap-2">
+        <div className="mt-1.5 sm:mt-2 flex gap-1.5">
           <input
             type="text"
             value={commentInput}
@@ -484,15 +498,16 @@ export default function ClipViewer({
                 addComment();
               }
             }}
-            placeholder="Ajouter un commentaire..."
-            className="flex-1 p-2 border rounded text-gray-950"
+            placeholder="Écrire un commentaire..."
+            className="flex-1 p-1.5 sm:p-2 border border-gray-600 rounded text-gray-950 text-[11px] sm:text-xs placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
 
           <button
             onClick={addComment}
-            className="px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-medium"
+            className="px-2 sm:px-3 py-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600 active:bg-indigo-700 font-medium text-[11px] sm:text-xs whitespace-nowrap transition-colors"
+            title="Envoyer le commentaire (ou appuyez sur Entrée)"
           >
-            Envoyer
+            ➤
           </button>
         </div>
       </div>
@@ -524,3 +539,5 @@ export default function ClipViewer({
     </div>
   );
 }
+
+export default ClipViewer;
