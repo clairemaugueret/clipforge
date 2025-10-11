@@ -278,7 +278,8 @@ function ClipViewer({
             </span>
 
             {/* Bouton de publication si statut READY */}
-            {clip.status === "READY" && (
+            {/* Bouton de publication si statut READY et utilisateur EXPERT */}
+            {clip.status === "READY" && user.role === "EXPERT" && (
               <>
                 <div className="hidden sm:block">📜</div>
                 <button

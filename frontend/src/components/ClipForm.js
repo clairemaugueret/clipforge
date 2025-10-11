@@ -380,7 +380,10 @@ function ClipForm({
       <div className="flex flex-col sm:flex-row gap-2">
         <button
           type="submit"
-          disabled={!isEditMode && isLoadingTwitchInfo}
+          disabled={
+            (!isEditMode && isLoadingTwitchInfo) ||
+            (!isEditMode && twitchInfoError === "Ce clip a déjà été proposé")
+          }
           className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
           {!isEditMode && isLoadingTwitchInfo

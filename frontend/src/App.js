@@ -505,7 +505,6 @@ function App() {
   const userLogout = () => {
     if (user.username) {
       dispatch(logout());
-      alert("✅ Déconnexion réussie !");
     }
   };
 
@@ -577,11 +576,11 @@ function App() {
               token: data.user.token,
               username: data.user.username,
               avatar_url: data.user.avatar_url,
+              role: data.user.role,
             })
           );
           // Nettoie l'URL IMMÉDIATEMENT après succès
           window.history.replaceState({}, document.title, "/");
-          alert("✅ Connexion réussie !");
         } else {
           // Si le code a déjà été consommé, on évite d'alerter si on est déjà connecté
           if (!user?.username) {
